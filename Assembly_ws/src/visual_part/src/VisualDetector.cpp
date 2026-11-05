@@ -1,15 +1,12 @@
 #include "visual_part/VisualDetector.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
 #include <stdexcept>
-#include <utility>
 
-
-const char *KeypointNameToString(
-    VisualKeypointName name) noexcept
-{
+const char *KeypointNameToString(VisualKeypointName name) noexcept {
     switch (name) {
     case VisualKeypointName::PillarTopLeft:
         return "TL";
@@ -41,73 +38,37 @@ const char *KeypointNameToString(
     return "unknown";
 }
 
-const VisualKeypoint &VisualResult::keypoint(VisualKeypointName name) const
-{
+const VisualKeypoint &VisualResult::keypoint(VisualKeypointName name) const {
     const std::size_t index = static_cast<std::size_t>(name);
     return keypoints.at(index);
 }
 
-namespace{
-    int validateTargetClassId(int targetClassId)
-    {
-         if (targetClassId < 0) {
-        throw std::invalid_argument(
-            "目标类别 ID 不能小于 0");
+VisualDetector::VisualDetector(const std::string &yoloModelPath, const std::string &litehrModelPath,
+                               float yoloScoreThreshold, int targetClassId, float bboxPadding,
+                               float keypointScoreThreshold, const std::string &yoloDevice,
+                               const std::string &litehrDevice, bool useHrnetFallback)
+    : use_hrnet_fallback_(useHrnetFallback), target_class_id_(targetClassId),
+      keypoint_score_threshold_(keypointScoreThreshold),
+      yolo_detector_(yoloModelPath, yoloScoreThreshold, yoloDevice),
+      litehr_detector_(litehrModelPath, bboxPadding, litehrDevice) {
+    if (targetClassId < 0) {
+        throw std::invalid_argument("目标类别 ID 不能小于 0");
     }
-
-        return targetClassId;
+    if (!std::isfinite(keypointScoreThreshold) || keypointScoreThreshold < 0.0F) {
+        throw std::invalid_argument("关键点置信度阈值必须是非负有限数");
     }
-
-    float validateKeypointScoreThreshold(float threshold)
-    {
-         if (!std::isfinite(threshold) ||
-        threshold < 0.0F) {
-        throw std::invalid_argument(
-            "关键点置信度阈值必须是大于等于 0 的有限数值");
-    }
-
-        return threshold;
-    }
-}//namespace
-
-VisualDetector::VisualDetector(
-    const std::string &yoloModelPath,
-    const std::string &litehrModelPath,
-    float yoloScoreThreshold,
-    int targetClassId,
-    float bboxPadding,
-    float keypointScoreThreshold,
-    const std::string &yoloDevice,
-    const std::string &litehrDevice)
-    : target_class_id_(
-          validateTargetClassId(targetClassId)),
-      keypoint_score_threshold_(
-          validateKeypointScoreThreshold(
-              keypointScoreThreshold)),
-      yolo_detector_(
-          yoloModelPath,
-          yoloScoreThreshold,
-          yoloDevice),
-      litehr_detector_(
-          litehrModelPath,
-          bboxPadding,
-          litehrDevice)
-{
 }
 
-const YoloResult *VisualDetector::selectBestTarget() const noexcept
-{
+const YoloResult *VisualDetector::selectBestTarget() const noexcept {
     const YoloResult *best = nullptr;
 
-    for (const YoloResult &candidate :
-         yolo_detector_.detectResults) {
+    for (const YoloResult &candidate : yolo_detector_.detectResults) {
 
         if (candidate.class_id != target_class_id_) {
             continue;
         }
 
-        if (best == nullptr ||
-            candidate.confidence > best->confidence) {
+        if (best == nullptr || candidate.confidence > best->confidence) {
             best = &candidate;
         }
     }
@@ -115,126 +76,74 @@ const YoloResult *VisualDetector::selectBestTarget() const noexcept
     return best;
 }
 
-std::array<VisualKeypoint,kVisualKeypointCount>VisualDetector::organizeKeypoints(
-    const std::vector<KeypointResult> &rawKeypoints
-) const
-{
-    if (rawKeypoints.size() != kVisualKeypointCount) {
-        throw std::runtime_error(
-            "LiteHR 返回的关键点数量不是 12");
+bool VisualDetector::findFallbackBox(cv::Mat &frame, cv::Rect &box) {
+    if (!litehr_detector_.Detect(frame, cv::Rect(0, 0, frame.cols, frame.rows))) return false;
+
+    float left = frame.cols;
+    float top = frame.rows;
+    float right = 0;
+    float bottom = 0;
+    int count = 0;
+    for (const KeypointResult &point : litehr_detector_.keypointResults) {
+        if (!std::isfinite(point.confidence) || !std::isfinite(point.point.x) ||
+            !std::isfinite(point.point.y) || point.confidence < keypoint_score_threshold_)
+            continue;
+        left = std::min(left, point.point.x);
+        top = std::min(top, point.point.y);
+        right = std::max(right, point.point.x);
+        bottom = std::max(bottom, point.point.y);
+        ++count;
     }
+    if (count < 4) return false;
 
-    std::array<
-        VisualKeypoint,
-        kVisualKeypointCount> organized{};
-
-    std::array<
-        bool,
-        kVisualKeypointCount> seen{};
-
-    for (const KeypointResult &raw : rawKeypoints) {
-        if (raw.keypoint_id < 0) {
-            throw std::runtime_error(
-                "LiteHR 返回了负数关键点编号");
-        }
-
-        const std::size_t index =
-            static_cast<std::size_t>(
-                raw.keypoint_id);
-
-        if (index >= kVisualKeypointCount) {
-            throw std::runtime_error(
-                "LiteHR 关键点编号超出 exchange12 定义");
-        }
-
-        if (seen[index]) {
-            throw std::runtime_error(
-                "LiteHR 返回了重复的关键点编号");
-        }
-
-        if (!std::isfinite(raw.confidence) ||
-            !std::isfinite(raw.point.x) ||
-            !std::isfinite(raw.point.y)) {
-            throw std::runtime_error(
-                "LiteHR 关键点包含无效数值");
-        }
-
-        seen[index] = true;
-
-        organized[index] = VisualKeypoint{
-            static_cast<VisualKeypointName>(index),
-            raw.point,
-            raw.confidence,
-            raw.confidence >= keypoint_score_threshold_
-        };
-    }
-
-    for (bool present : seen) {
-        if (!present) {
-            throw std::runtime_error(
-                "LiteHR 返回的关键点不完整");
-        }
-    }
-
-    return organized;
+    left = std::clamp(left, 0.0F, static_cast<float>(frame.cols));
+    top = std::clamp(top, 0.0F, static_cast<float>(frame.rows));
+    right = std::clamp(right, 0.0F, static_cast<float>(frame.cols));
+    bottom = std::clamp(bottom, 0.0F, static_cast<float>(frame.rows));
+    box = cv::Rect(cvFloor(left), cvFloor(top), cvCeil(right) - cvFloor(left),
+                   cvCeil(bottom) - cvFloor(top));
+    return box.width > 0 && box.height > 0;
 }
 
-std::optional<VisualResult> VisualDetector::Detect(
-    cv::Mat &frame)
-{
-    // 1. 拒绝空图像。
-    if (frame.empty()) {
-        return std::nullopt;
+VisualResult VisualDetector::Detect(cv::Mat &frame) {
+    VisualResult result;
+    // 和参考项目相同：YOLO 完全没有检测框时直接结束；缺整体框时才尝试回退。
+    if (!yolo_detector_.Detect(frame)) return result;
+    result.yolo_results = yolo_detector_.detectResults;
+
+    const YoloResult *target = selectBestTarget();
+    if (target != nullptr) {
+        result.class_id = target->class_id;
+        result.confidence = target->confidence;
+        result.box = target->box;
+    } else {
+        if (!use_hrnet_fallback_ || !findFallbackBox(frame, result.box)) return result;
+        result.used_fallback = true;
+        // 回退框来自关键点，不伪装成 YOLO 的 exchange 检测结果。
+        result.class_id = -1;
     }
+    if (!litehr_detector_.Detect(frame, result.box)) return result;
 
-    // 2. YOLO 检测整张图像。
-    if (!yolo_detector_.Detect(frame)) {
-        return std::nullopt;
+    const std::vector<KeypointResult> &points = litehr_detector_.keypointResults;
+    if (points.size() != kVisualKeypointCount) {
+        throw std::runtime_error("LiteHR 返回的关键点数量不是 12");
     }
-
-    // 3. 选择指定类别中置信度最高的目标。
-    const YoloResult *bestTarget =
-        selectBestTarget();
-
-    if (bestTarget == nullptr) {
-        return std::nullopt;
-    }
-
-    // 复制结果，后续不再依赖 vector 内部元素的地址。
-    const YoloResult target = *bestTarget;
-
-    // 4. 对目标框运行 LiteHRNet。
-    if (!litehr_detector_.Detect(
-            frame,
-            target.box)) {
-        return std::nullopt;
-    }
-
-     // 5. 按语义名称组织为固定的 12 个槽位。
-    std::array<
-        VisualKeypoint,
-        kVisualKeypointCount> keypoints =
-        organizeKeypoints(
-            litehr_detector_.keypointResults);
-
-    // 6. 统计达到置信度阈值的有效关键点。
-    std::size_t validKeypointCount = 0;
-
-    for (const VisualKeypoint &keypoint : keypoints) {
-        if (keypoint.valid) {
-            ++validKeypointCount;
+    // LiteHR 后处理按 0～11 顺序输出，数组下标就是语义编号。
+    for (std::size_t i = 0; i < points.size(); ++i) {
+        const KeypointResult &point = points[i];
+        if (!std::isfinite(point.confidence) || !std::isfinite(point.point.x) ||
+            !std::isfinite(point.point.y)) {
+            throw std::runtime_error("LiteHR 关键点包含无效数值");
         }
+        VisualKeypoint &keypoint = result.keypoints[i];
+        keypoint.name = static_cast<VisualKeypointName>(i);
+        keypoint.point = point.point;
+        keypoint.confidence = point.confidence;
+        keypoint.valid = point.confidence >= keypoint_score_threshold_;
+        if (keypoint.valid) ++result.valid_keypoint_count;
     }
+    if (result.used_fallback && result.valid_keypoint_count < 4) return result;
 
-    // 7. 组合两个模型的结果。
-    VisualResult result{
-        target.class_id,
-        target.confidence,
-        target.box,
-        std::move(keypoints),
-        validKeypointCount
-    };
-
+    result.success = true;
     return result;
 }
-

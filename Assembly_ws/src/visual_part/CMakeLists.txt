@@ -156,7 +156,7 @@ set_target_properties(pnp_core PROPERTIES
 )
 
 # 唯一的 ROS 2 节点：读取 YAML 参数、从海康相机取帧并调用联合识别层。
-# PnP、位姿发布和 TF 尚未加入。
+# 节点同时完成 PnP 求解、调试显示和 TF 发布。
 add_executable(visual_node
   src/VisualNode.cpp
 )
@@ -200,5 +200,13 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../../config/"
   DESTINATION share/${PROJECT_NAME}/config)
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../../model/"
   DESTINATION share/${PROJECT_NAME}/model)
+
+
+if(BUILD_TESTING)
+  enable_testing()
+  add_executable(vision_self_check tests/vision_self_check.cpp)
+  target_link_libraries(vision_self_check visual_core)
+  add_test(NAME vision_self_check COMMAND vision_self_check)
+endif()
 
 ament_package()

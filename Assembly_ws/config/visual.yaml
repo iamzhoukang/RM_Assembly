@@ -1,5 +1,9 @@
 visual_node:
   ros__parameters:
+    # camera：海康相机；video/image：离线调试，input.path 可填绝对路径。
+    input.source: "camera"
+    input.path: ""
+
     # 沿用上一项目的相机序列号；如果当前相机不同，请修改这一项。
     camera.serial_number: "DA9784621"
     camera.auto_white_balance: true
@@ -26,10 +30,13 @@ visual_node:
     yolo.model_path: "model/yolo/v10.12/openvino_best/best.xml"
     yolo.device: "CPU"  
     yolo.score_threshold: 0.60
-    yolo.target_class_id: 1  # exchange；pillar 为 0
+    yolo.target_class_id: 1  # 0=装配柱局部；1=包含装配柱和外壳的整体框，不是内外侧面
 
     litehr.model_path: "model/litehr/litehrnet30_v11.0/openvino_best/hrnet_heatmap.xml"
     litehr.device: "CPU"
+    # 找不到 exchange 整体框但仍有 YOLO 检测时，用整图关键点估框后再精识别。
+    # 先用本队录像验证，确认误检可接受后再开启。
+    litehr.use_fallback: false
     litehr.bbox_padding: 1.10
     # 联合识别层将低于此分数的关键点标记为无效，但保留固定名称槽位。
     litehr.keypoint_score_threshold: 0.20
