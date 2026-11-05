@@ -1,0 +1,5 @@
+{
+    "cmake.sourceDirectory": "${workspaceFolder}/src/visual_part",
+    "cmake.buildDirectory": "${workspaceFolder}/build/visual_part",
+    "cmake.configureOnOpen": false
+}

@@ -1,0 +1,64 @@
+visual_node:
+  ros__parameters:
+    # 沿用上一项目的相机序列号；如果当前相机不同，请修改这一项。
+    camera.serial_number: "DA9784621"
+    camera.auto_white_balance: true
+    camera.exposure_time_us: 8000
+    camera.gain: 0.7
+    camera.gamma: 1.0
+    camera.flip: false
+    camera.mirror: false
+
+    # 仅用于联调识别流程的近似内参，假设图像为 1440x1080。
+    # 这些数值不能用于机械臂定位；完成真实标定后必须全部替换。
+    camera.camera_matrix: [
+      1000.0, 0.0, 720.0,
+      0.0, 1000.0, 540.0,
+      0.0, 0.0, 1.0
+    ]
+    camera.distortion_coefficients: [0.0, 0.0, 0.0, 0.0, 0.0]
+
+    # PnP 输出目标相对于相机光学坐标系的位姿。
+    tf.parent_frame: "camera_optical_frame"
+    tf.child_frame: "exchange_target"
+
+    # 相对路径以安装后的 share/visual_part 为根目录；也可以填写绝对路径。
+    yolo.model_path: "model/yolo/v10.12/openvino_best/best.xml"
+    yolo.device: "CPU"  
+    yolo.score_threshold: 0.60
+    yolo.target_class_id: 1  # exchange；pillar 为 0
+
+    litehr.model_path: "model/litehr/litehrnet30_v11.0/openvino_best/hrnet_heatmap.xml"
+    litehr.device: "CPU"
+    litehr.bbox_padding: 1.10
+    # 联合识别层将低于此分数的关键点标记为无效，但保留固定名称槽位。
+    litehr.keypoint_score_threshold: 0.20
+
+    # 定时器周期不是相机帧率上限；单线程下推理不会重叠。
+    inference.period_ms: 50
+
+    # 有桌面环境时改成 true，可显示检测框和关键点。
+    debug.show_image: true
+
+    # PnP 求解参数。
+    pnp.schema: "exchange_12pt"
+    pnp.min_correspondences: 4
+    pnp.use_ransac: true
+    pnp.ransac_reprojection_error_px: 3.0
+    pnp.ransac_confidence: 0.99
+    pnp.ransac_iterations: 100
+
+    # exchange_12pt 三维语义点，单位为米。
+    pnp.schemas.exchange_12pt.TL: [-0.100000, -0.040000, 0.040000]
+    pnp.schemas.exchange_12pt.TR: [-0.100000, 0.040000, 0.040000]
+    pnp.schemas.exchange_12pt.BL: [-0.100000, -0.040000, -0.040000]
+    pnp.schemas.exchange_12pt.BR: [-0.100000, 0.040000, -0.040000]
+    pnp.schemas.exchange_12pt.ring: [0.000000, 0.000000, 0.000000]
+
+    pnp.schemas.exchange_12pt.light_BR: [-0.112000, 0.114870, 0.035953]
+    pnp.schemas.exchange_12pt.light_TR: [-0.112000, 0.114870, 0.167312]
+    pnp.schemas.exchange_12pt.shell_R: [-0.112000, 0.084871, 0.276449]
+    pnp.schemas.exchange_12pt.shell_M: [-0.112000, 0.000000, 0.325449]
+    pnp.schemas.exchange_12pt.shell_L: [-0.112000, -0.084871, 0.276449]
+    pnp.schemas.exchange_12pt.light_TL: [-0.112000, -0.114870, 0.167312]
+    pnp.schemas.exchange_12pt.light_BL: [-0.112000, -0.114870, 0.035953]

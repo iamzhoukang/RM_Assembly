@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>visual_part</name>
+  <version>0.1.0</version>
+  <description>机械臂视觉模块：海康相机、OpenVINO 双模型联合识别与 ROS 2 测试节点</description>
+
+  <maintainer email="lzhros@todo.todo">lzhros</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- 唯一的视觉节点使用 rclcpp 读取参数和运行定时器。 -->
+  <depend>rclcpp</depend>
+  <!-- 用包共享目录解析 YAML 中的相对模型路径。 -->
+  <depend>ament_index_cpp</depend>
+  <!-- 发布相机到目标的动态 TF。 -->
+  <depend>geometry_msgs</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+
+  <!-- 相机、模型预处理和联合识别结果均使用 OpenCV。 -->
+  <depend>libopencv-dev</depend>
+
+  <!-- visual_core 复用包内的 yolo_core/litehr_core，不需要新增 ROS 依赖。 -->
+  <!-- C++ 构建使用 ABI=1 的 OpenVINO 2025.4.1 Runtime；没有可用的 rosdep key。 -->
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

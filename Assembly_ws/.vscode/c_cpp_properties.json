@@ -1,0 +1,33 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/src/visual_part/include",
+                "${workspaceFolder}/src/visual_part",
+                "${workspaceFolder}/src/visual_part/rb26SDK/include",
+                "/usr/include/opencv4",
+                "/home/lzhros/intel/openvino_2025.4.1/runtime/include",
+                "/opt/ros/humble/include/**",
+                "/usr/include/eigen3"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/g++",
+            "cStandard": "c17",
+            "cppStandard": "gnu++17",
+            "intelliSenseMode": "linux-gcc-x64",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/src/visual_part/include",
+                    "${workspaceFolder}/src/visual_part",
+                    "${workspaceFolder}/src/visual_part/rb26SDK/include",
+                    "/usr/include/opencv4",
+                    "/home/lzhros/intel/openvino_2025.4.1/runtime/include",
+                    "/opt/ros/humble/include"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            }
+        }
+    ],
+    "version": 4
+}
