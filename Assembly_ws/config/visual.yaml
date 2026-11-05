@@ -39,7 +39,7 @@ visual_node:
     litehr.use_fallback: false
     litehr.bbox_padding: 1.10
     # 联合识别层将低于此分数的关键点标记为无效，但保留固定名称槽位。
-    litehr.keypoint_score_threshold: 0.20
+    litehr.keypoint_score_threshold: 0.60
 
     # 定时器周期不是相机帧率上限；单线程下推理不会重叠。
     inference.period_ms: 50
@@ -49,7 +49,8 @@ visual_node:
 
     # PnP 求解参数。
     pnp.schema: "exchange_12pt"
-    pnp.min_correspondences: 4
+    # 输入有效点和 RANSAC 内点都必须达到此数量。
+    pnp.min_correspondences: 5
     pnp.use_ransac: true
     pnp.ransac_reprojection_error_px: 3.0
     pnp.ransac_confidence: 0.99

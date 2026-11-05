@@ -205,7 +205,7 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../../model/"
 if(BUILD_TESTING)
   enable_testing()
   add_executable(vision_self_check tests/vision_self_check.cpp)
-  target_link_libraries(vision_self_check visual_core)
+  target_link_libraries(vision_self_check visual_core pnp_core)
   add_test(NAME vision_self_check COMMAND vision_self_check)
 endif()
 

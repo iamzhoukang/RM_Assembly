@@ -33,6 +33,19 @@ if (result.success) {
 
 `success` 表示识别流程成功，不等于 PnP 成功或位姿精度合格。PnP 保持独立判断。
 
+## 当前严格过滤参数
+
+- YOLO 置信度至少 `0.60`，保留原有设置。
+- 只有得分达到 `0.60` 的关键点参与 PnP。
+- 至少 5 个有效关键点；RANSAC 剔除外点后，也必须至少保留 5 个内点。
+- RANSAC 内点重投影阈值仍为 `3 px`，正深度检查和 LM 精修保留。
+- LiteHR 回退默认关闭。
+
+关键点阈值和最少有效点数参考港科示例；RANSAC 后也要求 5 个内点是本项目增加的约束。
+`pnp.min_correspondences` 同时控制输入点和内点的最低数量。
+`3 px` 是 RANSAC 的内点判定阈值，不是最终平均重投影误差发布门槛。
+这些检查可能增加遮挡或模糊场景中的漏检，仍需用无目标录像和真实目标录像实测。
+
 ## 构建和启动
 
 需要 ROS 2 Humble、OpenCV、海康 MVS SDK 和 ABI=1 的 OpenVINO 2025.4.1 C++ Runtime。
@@ -90,7 +103,7 @@ colcon test --packages-select visual_part --event-handlers console_direct+
 colcon test-result --verbose
 ```
 
-`vision_self_check` 生成小型 OpenVINO 模型，检查类别选框、语义点对应、回退开关、低分拒绝和失败后清空旧结果。
+`vision_self_check` 生成小型 OpenVINO 模型，检查类别选框、语义点对应、回退开关、低分拒绝、失败后清空旧结果及 PnP 有效点/内点数量门槛。
 它不评估真实场景识别率，也不替代 ROS 节点、相机和实机联调。
 
 ## 后续接口

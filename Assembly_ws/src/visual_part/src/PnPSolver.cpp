@@ -335,7 +335,7 @@ std::optional<PnPResult> PnPSolver::Solve(
         }
     }
 
-    if (selectedIndices.size() < 4) {
+    if (selectedIndices.size() < options_.min_correspondences) {
         return std::nullopt;
     }
 

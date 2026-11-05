@@ -11,7 +11,8 @@
 // PnP 每帧求解使用的配置。
 struct PnPOptions
 {
-    std::size_t min_correspondences = 4;
+    // 输入有效点和 RANSAC 内点都需达到此数量。
+    std::size_t min_correspondences = 5;
     bool use_ransac = true;
     double ransac_reprojection_error_px = 3.0;
     double ransac_confidence = 0.99;

@@ -107,7 +107,7 @@ VisualNode::VisualNode() : rclcpp::Node("visual_node") {
     const bool useHrnetFallback = declare_parameter<bool>("litehr.use_fallback", false);
     const double bboxPadding = declare_parameter<double>("litehr.bbox_padding", 1.10);
     const double keypointScoreThreshold =
-        declare_parameter<double>("litehr.keypoint_score_threshold", 0.20);
+        declare_parameter<double>("litehr.keypoint_score_threshold", 0.60);
 
     if (targetClassId < 0 || targetClassId > std::numeric_limits<int>::max()) {
         throw std::invalid_argument("yolo.target_class_id 超出有效范围");
@@ -118,7 +118,7 @@ VisualNode::VisualNode() : rclcpp::Node("visual_node") {
 
     const std::string pnpSchema = declare_parameter<std::string>("pnp.schema", "exchange_12pt");
     const std::int64_t minCorrespondences =
-        declare_parameter<std::int64_t>("pnp.min_correspondences", 4);
+        declare_parameter<std::int64_t>("pnp.min_correspondences", 5);
     const bool useRansac = declare_parameter<bool>("pnp.use_ransac", true);
     const double ransacReprojectionError =
         declare_parameter<double>("pnp.ransac_reprojection_error_px", 3.0);
