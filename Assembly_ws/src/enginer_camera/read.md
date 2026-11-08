@@ -39,9 +39,9 @@ algorithm、cmath 和 optional 已从当前节点移除。此前版本使用的 
 | sensor_msgs/msg/camera_info.hpp | sensor_msgs::msg::CameraInfo | 保存内参、畸变、图像尺寸和消息头 |
 | sensor_msgs/msg/image.hpp | sensor_msgs::msg::Image | 保存像素、编码、尺寸、行跨度和消息头 |
 | sensor_msgs/image_encodings.hpp | sensor_msgs::image_encodings::RGB8 | 标识三通道、每通道 8 位、RGB 排列 |
-| hik/hik.hpp | sdk::HikCamera | 初始化 MVS、打开设备、取帧和释放设备资源 |
+| CameraExample.hpp | sdk::CameraExample<sdk::HikCamera> | 使用海康实现取帧，保存最近一帧并提供 FPS、分辨率打印；设备操作继承自 HikCamera |
 
-CameraExample.hpp 在 HikCamera 上补充最近一帧缓存及分辨率、FPS 打印。这里通过 HikCamera 直接获取图像。
+CameraExample.hpp 在 HikCamera 上补充最近一帧缓存及分辨率、FPS 打印。当前节点通过 CameraExample<HikCamera> 获取图像，底层由 HikCamera 完成设备操作和像素转换。
 
 ## 从 main() 开始读代码
 
@@ -78,7 +78,7 @@ camera.yaml 中的参数键名需要和 declare_parameter() 的字符串一致�
 先声明并读取设备参数，再执行三步初始化。
 
 1. CameraSDKInit() 初始化 MVS。返回失败时抛出异常。
-2. make_unique<HikCamera>() 创建相机对象。
+2. make_unique<CameraExample<HikCamera>>() 创建相机对象。
 3. CameraInit() 查找指定序列号的设备，打开、配置并启动采集。
 
 SDK 的实参顺序如下。
@@ -110,8 +110,8 @@ CvImage 把消息头、RGB8 编码和 cv::Mat 组织起来，toImageMsg() 复制
 | camera.yaml 参数 | 读取位置 | 当前配置及含义 |
 |---|---|---|
 | serial_number | initCamera() | 已填写的设备序列号，使用字符串 |
-| exposure_time | initCamera() | 8000，单位微秒，即 8 ms |
-| gain | initCamera() | 1.0，SDK 将 0～1 映射到设备增益范围 |
+| exposure_time | initCamera() | 2000，单位微秒，即 2 ms |
+| gain | initCamera() | 0.0，使用设备最小增益；SDK 将 0～1 映射到设备增益范围 |
 | gamma | initCamera() | 1.0，SDK 尝试设置设备的 Gamma 属性 |
 | auto_white_balance | initCamera() | true，开启连续自动白平衡 |
 | camera_flip | initCamera() | false，上下翻转 |
@@ -175,3 +175,10 @@ ros2 topic echo /camera_info --once --qos-reliability best_effort
 参数名统一为 camera.yaml 中已有的 auto_white_balance 和 period_ms。默认标定路径统一为 calibration.yaml，原文件中的 fx、fy、cx、cy 和畸变符号占位已替换成数值占位。launch 入口现在会加载 camera.yaml。代码保留你已修复的 SDK 参数顺序。
 
 当前完成配置键名、数值类型、路径、启动入口和代码差异检查。ROS 2 编译、厂商库链接及 CS016 实机取帧由 Ubuntu 环境验证。
+
+
+## 画面颜色与亮度调整
+
+当前使用 CameraExample<HikCamera>，图像按照 rgb8 发布。Bayer 转换采用 COLOR_BayerRGGB2RGB 等四字母排列，使输出实际 RGB 顺序和消息编码一致。合成色块验证覆盖 RGGB、GRBG、GBRG、BGGR 四种排列，预期 RGB 为 [220, 100, 30]，修复后的结果均与预期一致。
+
+曝光初值改为 2000 微秒，增益比例改为 0.0。原来的 gain = 1.0 对应设备最大增益，容易放大亮度。实际曝光由现场光线和镜头光圈决定，先在最低增益下调整曝光时间。参数在启动时读取，修改 YAML 后重新启动节点。该初值仍需在 CS016 上确认，颜色修复也需通过红色和蓝色实物复核。

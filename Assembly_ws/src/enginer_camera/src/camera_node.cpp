@@ -14,7 +14,7 @@
 #include <sensor_msgs/image_encodings.hpp>
 
 //相机SDK
-#include "hik/hik.hpp"
+#include "CameraExample.hpp"
 
 class CameraNode : public rclcpp::Node 
 {
@@ -23,7 +23,7 @@ class CameraNode : public rclcpp::Node
         std::string serial_number_;
         bool camera_flip_ = false;
         bool camera_mirror_ = false;
-        std::unique_ptr<sdk::HikCamera> camera_;  //sdk初始化成功后构造,由sdk析构
+        std::unique_ptr<sdk::CameraExample<sdk::HikCamera>> camera_;  //sdk初始化成功后构造,由sdk析构
         sensor_msgs::msg::CameraInfo camera_info_;
         rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
         rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr info_pub_;
@@ -45,8 +45,8 @@ class CameraNode : public rclcpp::Node
     {
         //sdk会保存序列号指针,字符串的生命周期必须大于sdk对象的生命周期
         serial_number_ = declare_parameter<std::string>("serial_number", "");
-        const int exposure_us = declare_parameter<int>("exposure_time", 8000);
-        const double gain = declare_parameter<double>("gain", 1.0);
+        const int exposure_us = declare_parameter<int>("exposure_time", 2000);
+        const double gain = declare_parameter<double>("gain", 0.0);
         const double gamma = declare_parameter<double>("gamma", 1.0);
         const bool white_balance = declare_parameter<bool>("auto_white_balance", true);
         camera_flip_ = declare_parameter<bool>("camera_flip", false);
@@ -57,7 +57,7 @@ class CameraNode : public rclcpp::Node
             throw std::runtime_error("相机SDK初始化失败");
             }
 
-        camera_ = std::make_unique<sdk::HikCamera>();
+        camera_ = std::make_unique<sdk::CameraExample<sdk::HikCamera>>();
         const bool opened = camera_->CameraInit(
             serial_number_.c_str(), white_balance, exposure_us, gain, gamma
         );

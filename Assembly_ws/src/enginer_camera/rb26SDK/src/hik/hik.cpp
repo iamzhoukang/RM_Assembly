@@ -318,13 +318,14 @@ cv::Mat HikCamera::getFrame(bool flip, bool mirror)
             static_cast<int>(frame.stFrameInfo.nWidth),
             static_cast<int>(frame.stFrameInfo.nHeight));
 
+        // 使用四字母 Bayer 排列，避免 OpenCV 两字母别名造成红蓝通道互换。
         const static std::unordered_map<
             MvGvspPixelType,
             cv::ColorConversionCodes> bayer_to_rgb = {
-            {PixelType_Gvsp_BayerGR8, cv::COLOR_BayerGR2RGB},
-            {PixelType_Gvsp_BayerRG8, cv::COLOR_BayerRG2RGB},
-            {PixelType_Gvsp_BayerGB8, cv::COLOR_BayerGB2RGB},
-            {PixelType_Gvsp_BayerBG8, cv::COLOR_BayerBG2RGB},
+            {PixelType_Gvsp_BayerGR8, cv::COLOR_BayerGRBG2RGB},
+            {PixelType_Gvsp_BayerRG8, cv::COLOR_BayerRGGB2RGB},
+            {PixelType_Gvsp_BayerGB8, cv::COLOR_BayerGBRG2RGB},
+            {PixelType_Gvsp_BayerBG8, cv::COLOR_BayerBGGR2RGB},
         };
 
         const auto bayer_it = bayer_to_rgb.find(pixel_type);
