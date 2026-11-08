@@ -83,8 +83,8 @@ namespace enginer_net
             static_cast<double>(input_width_) / image_bgr.cols,
             static_cast<double>(input_height_) / image_bgr.rows
         );
-        const int resize_width = static_cast<int>(image_bgr.cols * scale);
-        const int resize_height = static_cast<int>(image_bgr.rows * scale);
+        const int resize_width = static_cast<int>(std::nearbyint(image_bgr.cols * scale));
+        const int resize_height = static_cast<int>(std::nearbyint(image_bgr.rows * scale));
         const int pad_x = (input_width_ - resize_width) / 2;
         const int pad_y = (input_height_ - resize_height) / 2;
 
@@ -96,12 +96,12 @@ namespace enginer_net
         ov::Tensor tensor(ov::element::f32,
                         {1,3,static_cast<size_t>(input_height_),static_cast<size_t>(input_width_)});
         float* data = tensor.data<float>();
-        const size_t plane_size = static_cast<size_t>(input_height_ * input_width_);
+        const size_t plane_size = static_cast<size_t>(input_height_) * input_width_;
         for(int y = 0; y < input_height_; ++y){
             const auto* row = canvas.ptr<cv::Vec3b>(y);
             for(int x = 0; x < input_width_; ++x){
                 const size_t index = static_cast<size_t>(y) * input_width_ + x;
-                //BGR的第二通道放到R平面,同时完成HWC -> NCHW转换和归一化
+                // BGR 下标 2 对应 R，写入 R 平面，同时完成 HWC -> NCHW 和归一化
                 data[index] = row[x][2] / 255.0f; // R
                 data[index + plane_size] = row[x][1] / 255.0f; // G
                 data[2 * plane_size + index] = row[x][0] / 255.0f; // B
