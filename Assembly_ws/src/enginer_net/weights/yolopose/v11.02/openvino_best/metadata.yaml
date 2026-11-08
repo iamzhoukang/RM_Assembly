@@ -1,0 +1,40 @@
+description: Ultralytics YOLO11s-pose model trained on /data/datasets/zguobd/RM2026-Engineer-Host/cv/nn/data/dataset_finalversion/dataset.yaml
+author: Ultralytics
+date: '2026-06-24T00:23:21.787166'
+version: 8.4.35
+license: AGPL-3.0 License (https://ultralytics.com/license)
+docs: https://docs.ultralytics.com
+stride: 32
+task: pose
+batch: 1
+imgsz:
+- 640
+- 640
+names:
+  0: pillar
+  1: exchange
+args:
+  batch: 1
+  fraction: 1.0
+  half: true
+  int8: false
+  dynamic: false
+  nms: true
+channels: 3
+end2end: false
+kpt_shape:
+- 12
+- 3
+kpt_names:
+  0: TL
+  1: TR
+  2: BL
+  3: BR
+  4: ring
+  5: light_BR
+  6: light_TR
+  7: shell_R
+  8: shell_M
+  9: shell_L
+  10: light_TL
+  11: light_BL
