@@ -58,11 +58,11 @@ class CameraNode : public rclcpp::Node
         const bool sdk_ready = sdk::HikCamera::CameraSDKInit();
         if(!sdk_ready){
             throw std::runtime_error("相机SDK初始化失败");
-        }
+            }
 
         camera_ = std::make_unique<sdk::HikCamera>();
         const bool opened = camera_->CameraInit(
-            serial_number_.c_str(), exposure_us, gain, gamma, white_balance
+            serial_number_.c_str(), white_balance, exposure_us, gain, gamma
         );
         if(!opened){
             throw std::runtime_error("相机打开或者采集失败"+ serial_number_ );
