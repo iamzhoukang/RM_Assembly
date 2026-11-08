@@ -1,0 +1,10 @@
+camera_node:
+  ros__parameters:
+    serial_number: "DA9784621" 
+    exposure_time: 8000  
+    gain: 1.0
+    auto_white_balance: true
+    camera_flip: false
+    camera_mirror: false
+    period_ms: 33
+    frame_id: "camera_optical"

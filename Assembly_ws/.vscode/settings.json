@@ -1,5 +1,27 @@
 {
-    "cmake.sourceDirectory": "${workspaceFolder}/src/visual_part",
-    "cmake.buildDirectory": "${workspaceFolder}/build/visual_part",
-    "cmake.configureOnOpen": false
+    "cmake.sourceDirectory": "${workspaceFolder}/src/enginer_camera",
+    "cmake.buildDirectory": "${workspaceFolder}/build/enginer_camera",
+    "cmake.configureOnOpen": false,
+    "cmake.configureArgs": [
+        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+    ],
+
+    "C_Cpp.intelliSenseCacheSize": 5120,
+    "C_Cpp.default.cStandard": "c17",
+    "C_Cpp.default.cppStandard": "gnu++17",
+
+    "git.autofetch": false,
+
+    "files.watcherExclude": {
+        "**/build/**": true,
+        "**/install/**": true,
+        "**/log/**": true,
+        "**/model/**": true
+    },
+    "search.exclude": {
+        "**/build": true,
+        "**/install": true,
+        "**/log": true,
+        "**/model": true
+    }
 }
