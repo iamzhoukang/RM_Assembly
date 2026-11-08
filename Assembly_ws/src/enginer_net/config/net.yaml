@@ -1,0 +1,5 @@
+net_node:
+  ros_parameters:
+    yolo_model: "weights/yolo/v10.12/openvino_best/best.xml"
+    yolo_device: "CPU"
+    yolo_conf: 0.55
