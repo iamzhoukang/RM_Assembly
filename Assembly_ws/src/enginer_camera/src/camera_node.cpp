@@ -8,6 +8,7 @@
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <camera_calibration_parsers/parse.hpp>
 #include <cv_bridge/cv_bridge.h>
+#include <opencv2/core.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/image.hpp>
@@ -47,12 +48,16 @@ class CameraNode : public rclcpp::Node
     {
         //sdk会保存序列号指针,字符串的生命周期必须大于sdk对象的生命周期
         serial_number_ = declare_parameter<std::string>("serial_number", "");
-        const int exposure_us = declare_parameter<int>("exposure_time", 2000);
-        const double gain = declare_parameter<double>("gain", 0.0);
+        const int exposure_us = declare_parameter<int>("exposure_time", 8000);
+        const double gain = declare_parameter<double>("gain", 0.3);
         const double gamma = declare_parameter<double>("gamma", 1.0);
         const bool white_balance = declare_parameter<bool>("auto_white_balance", true);
         camera_flip_ = declare_parameter<bool>("camera_flip", false);
         camera_mirror_ = declare_parameter<bool>("camera_mirror", false);
+
+        RCLCPP_INFO(get_logger(),
+            "启动参数 serial=%s exposure_time=%d us gain=%.3f gamma=%.3f white_balance=%s",
+            serial_number_.c_str(), exposure_us, gain, gamma, white_balance ? "true" : "false");
 
         const bool sdk_ready = sdk::HikCamera::CameraSDKInit();
         if(!sdk_ready){
@@ -75,6 +80,10 @@ class CameraNode : public rclcpp::Node
             RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000, "采集到空帧,请检查相机连接");
             return;
         }
+        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 3000,
+            "收到图像 %dx%d，像素均值 R=%.1f G=%.1f B=%.1f（范围 0~255）",
+            rgb_frame.cols, rgb_frame.rows,
+            cv::mean(rgb_frame)[0], cv::mean(rgb_frame)[1], cv::mean(rgb_frame)[2]);
         //getFrame只返回图像,记录下主机收到解码帧的时间戳,用于ros2消息头
         camera_info_.header.stamp = now();
         camera_info_.header.frame_id = frame_id;

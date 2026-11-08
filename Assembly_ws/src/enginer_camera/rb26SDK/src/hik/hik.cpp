@@ -280,6 +280,26 @@ bool HikCamera::capture_start(
     }
 
     grabbing_ = true;
+
+    // 回读设备属性，区分 YAML 的请求值和相机实际应用值。
+    MVCC_FLOATVALUE actual_exposure{};
+    const int exposure_ret = MV_CC_GetFloatValue(camera_handle_, "ExposureTime", &actual_exposure);
+    if (exposure_ret == MV_OK) {
+        std::cout << "设备实际 ExposureTime: " << actual_exposure.fCurValue << " us" << std::endl;
+    } else {
+        std::cerr << "ExposureTime readback failed, error: 0x"
+                  << std::hex << exposure_ret << std::dec << std::endl;
+    }
+
+    MVCC_FLOATVALUE actual_gain{};
+    const int gain_ret = MV_CC_GetFloatValue(camera_handle_, "Gain", &actual_gain);
+    if (gain_ret == MV_OK) {
+        std::cout << "设备实际 Gain: " << actual_gain.fCurValue
+                  << " (请求比例 " << clamped_gain << ", 写入值 " << gain_value << ")" << std::endl;
+    } else {
+        std::cerr << "Gain readback failed, error: 0x"
+                  << std::hex << gain_ret << std::dec << std::endl;
+    }
     return true;
 }
 
@@ -318,9 +338,7 @@ cv::Mat HikCamera::getFrame(bool flip, bool mirror)
             static_cast<int>(frame.stFrameInfo.nWidth),
             static_cast<int>(frame.stFrameInfo.nHeight));
 
-        // OpenCV 的 Bayer 常量命名与直觉相反：只有 "xxx2BGR" 这一组是真枚举，
-        // "xxx2RGB" 只是少数几个的重定义。下表按「传感器 2x2 排列 -> 输出内存顺序 R,G,B」
-        // 实测得到（OpenCV 4.5 系列没有四字母别名 xxxRGGB2RGB，4.9 才加入）。
+        // 这些两字母常量分别等价于对应完整 Bayer 排列到 RGB 的转换，兼容旧版 OpenCV。
         const static std::unordered_map<
             MvGvspPixelType,
             cv::ColorConversionCodes> bayer_to_rgb = {

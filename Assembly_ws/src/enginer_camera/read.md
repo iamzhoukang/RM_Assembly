@@ -110,8 +110,8 @@ CvImage 把消息头、RGB8 编码和 cv::Mat 组织起来，toImageMsg() 复制
 | camera.yaml 参数 | 读取位置 | 当前配置及含义 |
 |---|---|---|
 | serial_number | initCamera() | 已填写的设备序列号，使用字符串 |
-| exposure_time | initCamera() | 2000，单位微秒，即 2 ms |
-| gain | initCamera() | 0.0，使用设备最小增益；SDK 将 0～1 映射到设备增益范围 |
+| exposure_time | initCamera() | 8000，单位微秒，即 8 ms |
+| gain | initCamera() | 0.3，SDK 将 0～1 映射到设备增益范围 |
 | gamma | initCamera() | 1.0，SDK 尝试设置设备的 Gamma 属性 |
 | auto_white_balance | initCamera() | true，开启连续自动白平衡 |
 | camera_flip | initCamera() | false，上下翻转 |
@@ -182,3 +182,22 @@ ros2 topic echo /camera_info --once --qos-reliability best_effort
 当前使用 CameraExample<HikCamera>，图像按照 rgb8 发布。Bayer 转换采用 COLOR_BayerRGGB2RGB 等四字母排列，使输出实际 RGB 顺序和消息编码一致。合成色块验证覆盖 RGGB、GRBG、GBRG、BGGR 四种排列，预期 RGB 为 [220, 100, 30]，修复后的结果均与预期一致。
 
 曝光初值改为 2000 微秒，增益比例改为 0.0。原来的 gain = 1.0 对应设备最大增益，容易放大亮度。实际曝光由现场光线和镜头光圈决定，先在最低增益下调整曝光时间。参数在启动时读取，修改 YAML 后重新启动节点。该初值仍需在 CS016 上确认，颜色修复也需通过红色和蓝色实物复核。
+
+
+## 黑屏排查版本
+
+最新提交使用 COLOR_BayerRG2BGR 等两字母常量。经四种 Bayer 合成图验证，它们与上一个版本的对应四字母 RGB 常量数值相同，输出 RGB 也相同。红蓝通道转换不会把有亮度的彩色图整体变成零。
+
+代码和 YAML 的初值现在统一为 exposure_time = 8000、gain = 0.3。原来直接 ros2 run 且不传参数文件时，会使用代码中的 2000 和 0.0。参数在启动时读取，编辑 YAML 或 ros2 param set 后，当前实例的相机设置不会自动刷新。重启时还要确保修改的是实际加载的参数文件。
+
+新增诊断日志按顺序显示节点请求的参数、设备回读的 ExposureTime 和 Gain，以及每 3 秒的图像 RGB 均值。设备回读失败会打印厂商返回码。均值每个通道为 0～255；新图像的均值持续接近零表示消息里的像素确实很暗；画面黑但均值明显非零时应核对查看器显示和话题选择；持续空帧警告表示取帧失败。这些日志用于在 Ubuntu 本机判断，静态代码检查无法确定镜头进光和设备实际状态。
+
+可直接指定源码参数文件及命令行覆盖值，避免加载其他安装目录的 YAML。先重新编译并 source 本工作区，再执行下面命令。
+
+```bash
+ros2 run enginer_camera camera_node --ros-args \
+  --params-file src/enginer_camera/config/camera.yaml \
+  -p exposure_time:=20000 -p gain:=0.3
+```
+
+此处 20000 的单位为微秒，即 20 ms，是一次手动曝光试验。运行前退出同一相机的旧节点和 MVS 采集窗口。确认图像后再按现场亮度调整。
