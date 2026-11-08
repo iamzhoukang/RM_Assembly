@@ -1,13 +1,10 @@
-#include <algorithm>   
 #include <chrono>
-#include <cmath>
 #include <cstdlib>
 #include <memory>
-#include <optional>
 #include <stdexcept>
 #include <string>
 
-//ros2bag
+// ROS 2 节点、图像消息和标定文件读取
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <camera_calibration_parsers/parse.hpp>
 #include <cv_bridge/cv_bridge.h>
@@ -35,7 +32,7 @@ class CameraNode : public rclcpp::Node
     void loadCalibration()
     {
         const auto default_path = ament_index_cpp::get_package_share_directory("enginer_camera") 
-                                + "/config/camera_calibration.yaml";
+                                + "/config/calibration.yaml";
         const auto path = declare_parameter<std::string>("calibration_file", default_path);
         std::string camera_name;
         const bool loaded = camera_calibration_parsers::readCalibration(path, camera_name, camera_info_);
@@ -51,7 +48,7 @@ class CameraNode : public rclcpp::Node
         const int exposure_us = declare_parameter<int>("exposure_time", 8000);
         const double gain = declare_parameter<double>("gain", 1.0);
         const double gamma = declare_parameter<double>("gamma", 1.0);
-        const bool white_balance = declare_parameter<bool>("white_balance", false);
+        const bool white_balance = declare_parameter<bool>("auto_white_balance", true);
         camera_flip_ = declare_parameter<bool>("camera_flip", false);
         camera_mirror_ = declare_parameter<bool>("camera_mirror", false);
 
@@ -94,8 +91,8 @@ class CameraNode : public rclcpp::Node
     public:
         CameraNode(): Node("camera_node")
         {
-            frame_id = declare_parameter<std::string>("frame_id", "camera_frame");
-            const int period_ms = declare_parameter<int>("publish_period_ms", 33);
+            frame_id = declare_parameter<std::string>("frame_id", "camera_optical");
+            const int period_ms = declare_parameter<int>("period_ms", 33);
             loadCalibration();
             initCamera();
 

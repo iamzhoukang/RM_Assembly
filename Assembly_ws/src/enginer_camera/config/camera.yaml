@@ -3,6 +3,7 @@ camera_node:
     serial_number: "DA9784621" 
     exposure_time: 8000  
     gain: 1.0
+    gamma: 1.0
     auto_white_balance: true
     camera_flip: false
     camera_mirror: false
