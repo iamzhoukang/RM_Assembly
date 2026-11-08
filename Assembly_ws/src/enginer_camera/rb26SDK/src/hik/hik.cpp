@@ -318,14 +318,16 @@ cv::Mat HikCamera::getFrame(bool flip, bool mirror)
             static_cast<int>(frame.stFrameInfo.nWidth),
             static_cast<int>(frame.stFrameInfo.nHeight));
 
-        // 使用四字母 Bayer 排列，避免 OpenCV 两字母别名造成红蓝通道互换。
+        // OpenCV 的 Bayer 常量命名与直觉相反：只有 "xxx2BGR" 这一组是真枚举，
+        // "xxx2RGB" 只是少数几个的重定义。下表按「传感器 2x2 排列 -> 输出内存顺序 R,G,B」
+        // 实测得到（OpenCV 4.5 系列没有四字母别名 xxxRGGB2RGB，4.9 才加入）。
         const static std::unordered_map<
             MvGvspPixelType,
             cv::ColorConversionCodes> bayer_to_rgb = {
-            {PixelType_Gvsp_BayerGR8, cv::COLOR_BayerGRBG2RGB},
-            {PixelType_Gvsp_BayerRG8, cv::COLOR_BayerRGGB2RGB},
-            {PixelType_Gvsp_BayerGB8, cv::COLOR_BayerGBRG2RGB},
-            {PixelType_Gvsp_BayerBG8, cv::COLOR_BayerBGGR2RGB},
+            {PixelType_Gvsp_BayerGR8, cv::COLOR_BayerGR2BGR},  // GRBG
+            {PixelType_Gvsp_BayerRG8, cv::COLOR_BayerRG2BGR},  // RGGB
+            {PixelType_Gvsp_BayerGB8, cv::COLOR_BayerGB2BGR},  // GBRG
+            {PixelType_Gvsp_BayerBG8, cv::COLOR_BayerBG2BGR},  // BGGR
         };
 
         const auto bayer_it = bayer_to_rgb.find(pixel_type);

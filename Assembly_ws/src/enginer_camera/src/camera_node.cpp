@@ -34,11 +34,13 @@ class CameraNode : public rclcpp::Node
         const auto default_path = ament_index_cpp::get_package_share_directory("enginer_camera") 
                                 + "/config/calibration.yaml";
         const auto path = declare_parameter<std::string>("calibration_file", default_path);
+
         std::string camera_name;
-        const bool loaded = camera_calibration_parsers::readCalibration(path, camera_name, camera_info_);
-        if(!loaded){
-            throw std::runtime_error("读取相机标定文件失败"+ path);
+        if(camera_calibration_parsers::readCalibration(path, camera_name, camera_info_)){
+            RCLCPP_INFO(get_logger(), "已加载相机标定文件: %s", path.c_str());
+            return;
         }
+
     }
 
     void initCamera()
