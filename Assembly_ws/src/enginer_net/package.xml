@@ -6,6 +6,7 @@
   <maintainer email="16355965+lzhzhoukang@user.noreply.gitee.com">lzhros</maintainer>
   <license>Apache-2.0</license>
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>ament_index_cpp</depend>
   <depend>libopencv-dev</depend>
   <depend>yaml-cpp</depend>
   <!-- OpenVINO C++ Runtime 由 CMake 查找 OpenVINOConfig.cmake。 -->

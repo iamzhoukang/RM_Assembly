@@ -14,6 +14,9 @@ enginer_net/
 │   ├── yolo_detector.cpp
 │   ├── litehr_detector.cpp
 │   └── detector.cpp
+├── tools/
+│   ├── detector_example.cpp
+│   └── example.jpg
 ├── config/net.yaml
 ├── weights/
 ├── CMakeLists.txt
@@ -253,3 +256,29 @@ BGR 图像 → YOLO
 已将真实 C++ Detector 与港科 Python 的 YoloHRNetBackend 做 23 组对照，覆盖正常多框、扩框、整图回退、空检测、粗定位失败、可见点不足、关闭删点、最低分数失败、名称子集/重复/越界、空名称、可选阈值、非法通道与浮点图像转换。正常、回退、浮点图像三组使用项目真实 LiteHRNet 权重；其余使用可控输出的 OpenVINO 测试模型。
 
 关键点坐标、分数、框和调试元数据在数值容差内一致，主要业务异常触发条件一致；当前提示已改为中文，最初对照时使用与港科相同的英文消息。NumPy 隐式失败在 C++ 中使用相应的安全异常表达，类型和措辞不要求逐字相同。完整 ROS 2 构建、相机联调、PnP 与位姿发布尚未验证或接入。
+
+
+## 单张图片推理示例
+
+最小入口在 tools/detector_example.cpp：读取 net.yaml → 读图 → 创建 Detector → detect() → 在图像副本上绘制 → imshow()。图片不存在时直接报错。所有推理参数都从安装目录的 config/net.yaml 读取，两个模型路径相对于包的 share 目录解析，也支持绝对路径。
+
+在 Assembly_ws 下编译并运行：
+
+```bash
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install --packages-select enginer_net
+source install/setup.bash
+ros2 run enginer_net detector_example
+```
+
+默认读取包内 tools/example.jpg，也可以指定自己的图片：
+
+```bash
+ros2 run enginer_net detector_example /绝对路径/test.jpg
+```
+
+黄色框为实际送入 LiteHRNet 的目标框；绿色点为经过 Detector 置信度筛选后返回的点，旁边显示名称和热图分数。在 OpenCV 窗口中按任意键结束。若未找到目标或点数不足，会打印 Detector 的中文异常并以非零退出码结束。
+
+示例是普通 C++ 可执行程序，不创建 ROS 节点。ament_index_cpp 用于查找包资源目录，imgcodecs 提供 imread，highgui 提供 imshow/waitKey/destroyAllWindows，imgproc 提供框、圆点和文字绘制；这些依赖已在 CMakeLists.txt 与 package.xml 中接入。使用 Ubuntu 桌面会话及支持窗口显示的 OpenCV 运行。
+
+已用 tools/example.jpg 和实际 YOLO、LiteHRNet 权重执行本示例的 C++ 推理与绘制，成功保留 12 个关键点；无效图片路径能返回非零退出码。本机没有 ROS 2，验证时以包路径替代 ament 索引查询、以保存图片替代窗口显示。Ubuntu 的完整 colcon 构建和 imshow 窗口交互仍需在设备上验证。
