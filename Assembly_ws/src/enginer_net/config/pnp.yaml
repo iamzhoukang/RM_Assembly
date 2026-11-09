@@ -7,7 +7,6 @@ net_node:
       ransac_confidence: 0.99
       ransac_iterations: 100
 
-    # 港科示例的兑换站三维点，坐标顺序 [x, y, z]，单位：米。
     # ring 为目标坐标系原点，名称必须与 Detector 输出一致。
     keypoint_schemas:
       exchange_12pt:

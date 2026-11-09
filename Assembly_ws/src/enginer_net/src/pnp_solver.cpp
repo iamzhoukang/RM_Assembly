@@ -46,7 +46,7 @@ double PnpSolver::minimumDepth(const std::vector<cv::Point3d>& object_points,
     for (const auto& point : object_points) {
         const double depth = rotation(2, 0) * point.x + rotation(2, 1) * point.y +
                              rotation(2, 2) * point.z + tvec.at<double>(2);
-        // NumPy min 遇到 NaN 时返回 NaN，保留原版的比较行为。
+        // NumPy min 遇到 NaN 时返回 NaN
         if (std::isnan(depth)) {
             return depth;
         }
@@ -147,7 +147,7 @@ PnpResult PnpSolver::estimate(const KeypointObservation& observation,
         }
         result.transform(row, 3) = best_tvec.at<double>(row);
     }
-    // 最终误差按全部匹配点计算，包括被 RANSAC 排除的点，与港科一致。
+    // 最终误差按全部匹配点计算，包括被 RANSAC 排除的点
     result.reprojection_error_px = meanReprojectionError(matched, camera, dist, best_rvec, best_tvec);
     return result;
 }
