@@ -11,7 +11,7 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
 
 find_package(ament_cmake REQUIRED)
 find_package(ament_index_cpp REQUIRED)
-find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs highgui)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs highgui calib3d)
 
 # OpenVINO 优先用环境里的；找不到就回退到本仓库第三方的源码编译版本（ABI=1）。
 # 这样不需要 export CMAKE_PREFIX_PATH / OpenVINO_DIR 也能直接 colcon build。
@@ -44,6 +44,9 @@ target_link_libraries(litehr_detector PUBLIC openvino::runtime ${OpenCV_LIBS})
 add_library(detector src/detector.cpp)
 target_link_libraries(detector PUBLIC yolo_detector litehr_detector)
 
+add_library(pnp_solver src/pnp_solver.cpp)
+target_link_libraries(pnp_solver PUBLIC detector ${OpenCV_LIBS})
+
 add_executable(detector_example tools/detector_example.cpp)
 ament_target_dependencies(detector_example ament_index_cpp)
 target_link_libraries(detector_example detector ${OpenCV_LIBS})
@@ -51,12 +54,12 @@ target_link_libraries(detector_example detector ${OpenCV_LIBS})
 install(TARGETS detector_example DESTINATION lib/${PROJECT_NAME})
 install(FILES tools/example.jpg DESTINATION share/${PROJECT_NAME}/tools)
 
-install(TARGETS detector yolo_detector litehr_detector
+install(TARGETS pnp_solver detector yolo_detector litehr_detector
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib)
 install(DIRECTORY include/ DESTINATION include)
 install(DIRECTORY config weights DESTINATION share/${PROJECT_NAME})
 ament_export_include_directories(include)
-ament_export_libraries(detector yolo_detector litehr_detector)
+ament_export_libraries(pnp_solver detector yolo_detector litehr_detector)
 ament_export_dependencies(OpenCV OpenVINO yaml-cpp)
 ament_package()

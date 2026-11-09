@@ -1,6 +1,6 @@
 # enginer_net 算法阅读说明
 
-当前包含 YoloDetector、LiteHRDetector 和 Detector 三个普通 C++ 类。Detector 负责组织两个网络、选择目标并筛选关键点。YOLO 返回原图检测框，LiteHRNet 接收原图及一个 xyxy 框，返回原图关键点和热图分数。两者使用 OpenVINO 同步推理，每个类实例顺序复用自己的 InferRequest。
+当前包含 YoloDetector、LiteHRDetector、Detector 和 PnpSolver 四个普通 C++ 类。Detector 负责组织两个网络、选择目标并筛选关键点。YOLO 返回原图检测框，LiteHRNet 接收原图及一个 xyxy 框，返回原图关键点和热图分数。两者使用 OpenVINO 同步推理，每个类实例顺序复用自己的 InferRequest。
 
 ## 目录
 
@@ -9,15 +9,19 @@ enginer_net/
 ├── include/
 │   ├── yolo_detector.hpp
 │   ├── litehr_detector.hpp
-│   └── detector.hpp
+│   ├── detector.hpp
+│   └── pnp_solver.hpp
 ├── src/
 │   ├── yolo_detector.cpp
 │   ├── litehr_detector.cpp
-│   └── detector.cpp
+│   ├── detector.cpp
+│   └── pnp_solver.cpp
 ├── tools/
 │   ├── detector_example.cpp
 │   └── example.jpg
-├── config/net.yaml
+├── config/
+│   ├── net.yaml
+│   └── pnp.yaml
 ├── weights/
 ├── CMakeLists.txt
 ├── package.xml
@@ -130,7 +134,7 @@ names 行为也已对齐。metadata.yaml 不存在或 names 不是映射时保�
 
 ## 编译
 
-在 Assembly_ws 中运行下面命令，构建三个算法库。依赖为 OpenCV、yaml-cpp 和 OpenVINO C++ Runtime。
+在 Assembly_ws 中运行下面命令，构建四个算法库。依赖为 OpenCV、yaml-cpp 和 OpenVINO C++ Runtime。
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -255,7 +259,7 @@ BGR 图像 → YOLO
 
 已将真实 C++ Detector 与港科 Python 的 YoloHRNetBackend 做 23 组对照，覆盖正常多框、扩框、整图回退、空检测、粗定位失败、可见点不足、关闭删点、最低分数失败、名称子集/重复/越界、空名称、可选阈值、非法通道与浮点图像转换。正常、回退、浮点图像三组使用项目真实 LiteHRNet 权重；其余使用可控输出的 OpenVINO 测试模型。
 
-关键点坐标、分数、框和调试元数据在数值容差内一致，主要业务异常触发条件一致；当前提示已改为中文，最初对照时使用与港科相同的英文消息。NumPy 隐式失败在 C++ 中使用相应的安全异常表达，类型和措辞不要求逐字相同。完整 ROS 2 构建、相机联调、PnP 与位姿发布尚未验证或接入。
+关键点坐标、分数、框和调试元数据在数值容差内一致，主要业务异常触发条件一致；当前提示已改为中文，最初对照时使用与港科相同的英文消息。NumPy 隐式失败在 C++ 中使用相应的安全异常表达，类型和措辞不要求逐字相同。PnP 求解器已在下文接入；完整 ROS 2 构建、相机联调和位姿发布仍需后续验证。
 
 
 ## 单张图片推理示例
@@ -282,3 +286,117 @@ ros2 run enginer_net detector_example /绝对路径/test.jpg
 示例是普通 C++ 可执行程序，不创建 ROS 节点。ament_index_cpp 用于查找包资源目录，imgcodecs 提供 imread，highgui 提供 imshow/waitKey/destroyAllWindows，imgproc 提供框、圆点和文字绘制；这些依赖已在 CMakeLists.txt 与 package.xml 中接入。使用 Ubuntu 桌面会话及支持窗口显示的 OpenCV 运行。
 
 已用 tools/example.jpg 和实际 YOLO、LiteHRNet 权重执行本示例的 C++ 推理与绘制，成功保留 12 个关键点；无效图片路径能返回非零退出码。本机没有 ROS 2，验证时以包路径替代 ament 索引查询、以保存图片替代窗口显示。Ubuntu 的完整 colcon 构建和 imshow 窗口交互仍需在设备上验证。
+
+
+## PnP：三维模型与位姿求解
+
+新增 include/pnp_solver.hpp、src/pnp_solver.cpp 和 config/pnp.yaml。PnpSolver 对应港科 perception/pose.py 中的 PnPEstimator。输入为 Detector 的 KeypointObservation、3×3 相机内参和畸变系数；输出为目标到相机的 4×4 变换矩阵与全部匹配点的平均重投影误差。
+
+### 建议抄写顺序
+
+1. PnpConfig、PnpResult 和 PnpSolver 类声明。
+2. 构造函数：保存参数，拒绝空三维点模型。
+3. matchedPoints()：按名称配对二维、三维点，跳过模型没有的名称。
+4. minimumDepth()：把模型点变换到相机坐标系，取得最小 Z 值。
+5. meanReprojectionError()：将三维点投影回图像，求像素距离的平均值。
+6. estimate()：依次组织 RANSAC、SQPnP、多候选筛选、LM 细化和结果输出。
+
+### 配置文件及调用
+
+pnp.yaml 中，pose_solver 保存 schema 名称及四个 RANSAC 参数，keypoint_schemas.exchange_12pt.points 保存完整的 12 点模型。所有三维坐标为米，与港科 system_config.example.yaml 一致；ring 对应目标原点。每帧根据 Detector 保留的点名取三维坐标，不要求全部点出现。
+
+PnpConfig.object_points 使用 map<string, Point3d>，每个值在类型上固定为三个坐标，对应原版构造函数对三维点形状的检查。若从 YAML 的可变长数组构造 Point3d，应先检查有三个元素。
+
+算法库接收 PnpConfig，不主动读取文件。未来 net_node 加载配置并填入结构体：
+
+| YAML 字段 | C++ 配置 |
+|---|---|
+| pose_solver.use_ransac | config.use_ransac |
+| pose_solver.ransac_reprojection_error_px | config.ransac_reprojection_error_px |
+| pose_solver.ransac_confidence | config.ransac_confidence |
+| pose_solver.ransac_iterations | config.ransac_iterations |
+| keypoint_schemas[pose_solver.schema].points | config.object_points |
+
+结构体默认值与港科 PnPEstimator 构造函数一致：关闭 RANSAC、阈值 8 像素、置信度 0.99、迭代 100 次。pnp.yaml 则沿用港科系统示例配置，开启 RANSAC，阈值设为 3 像素。使用 YAML 时应把这些值传入 config。
+
+调用方式如下，config 已由调用者填好，observation 来自 Detector：
+
+```cpp
+enginer_net::PnpSolver pnp(config);
+const auto pose = pnp.estimate(observation, camera_matrix, distortion);
+
+// 平移单位：米；矩阵作用方向：目标坐标 → 相机坐标。
+const double x = pose.transform(0, 3);
+const double y = pose.transform(1, 3);
+const double z = pose.transform(2, 3);
+const double error_px = pose.reprojection_error_px;
+```
+
+camera_matrix 接收 cv::Mat，必须为 3×3 单通道，内部转为 double。distortion 可以传行向量或列向量，内部展平成 double 向量；省略时使用五个零，表示无畸变。实机应传入 camera_info 中与当前图像对应的真实内参和畸变。此文件不提供占位内参，避免把测试数据当成实际标定值。
+
+### 与港科一致的求解流程
+
+```text
+校验内参矩阵，准备畸变系数
+    ↓
+按名称匹配二维和三维点：至少 4 对
+    ↓
+开启 RANSAC 时：solvePnPRansac(SQPNP)，至少 4 个内点
+    ↓
+用内点调用 solvePnPGeneric(SQPNP)，获得候选解
+    ↓
+对各候选：正深度检查 → solvePnPRefineLM → 再次正深度检查
+    ↓
+按求解所用点的平均重投影误差，选第一个最优候选
+    ↓
+构造相机 ← 目标的变换，计算全部匹配点的平均重投影误差
+```
+
+正深度检查针对求解所用点，即开启 RANSAC 后的内点；变换到相机坐标系后，最小深度小于等于 0 的候选会被跳过。低分点过滤由 Detector 完成，PnP 不再次按置信度筛选或加权。
+
+### 为什么没有“最终误差过大就拒绝”
+
+港科原版没有这一规则，本版保持一致。RANSAC 的 3 像素阈值用于筛选内点；最终输出的 reprojection_error_px 却包含全部匹配点，其中也包括被排除的异常点。少数异常点可以使最终误差很高，同时内点求出的位姿仍然较好。
+
+合成测试中，两个点被故意偏移后，RANSAC 仍恢复了已知正确位姿，而全部点的平均误差约为 17.835 像素。这也说明直接对这个报告值设置很小的门槛，可能会拒绝正确结果。若后续需要增加质量拒绝规则，应明确使用内点误差、内点数量/比例等指标，并通过实际数据确定阈值。
+
+### 头文件作用
+
+| 头文件 | 类型或函数 | 用途 |
+|---|---|---|
+| map、string | map<string, Point3d> | 按名称保存三维模型 |
+| vector | vector<Point2d/Point3d/Mat/int> | 匹配点、候选位姿及内点索引 |
+| opencv2/core.hpp | Mat、Matx44d、Point3d | 相机参数、变换矩阵和几何点 |
+| detector.hpp | KeypointObservation | 复用已经定义的检测结果 |
+| opencv2/calib3d.hpp | solvePnPRansac、solvePnPGeneric、solvePnPRefineLM、Rodrigues、projectPoints | 位姿求解、细化、旋转转换及投影 |
+| algorithm | min | 取得最小深度 |
+| cmath、limits | isnan、infinity | 最小深度统计，保留 NumPy min 的数值行为 |
+| stdexcept | invalid_argument、runtime_error | 与原版对应的中文异常 |
+
+### 错误处理对照
+
+| 本版失败条件 | 港科对应处理 |
+|---|---|
+| 三维模型为空 | 构造函数的 object_points 检查；Point3d 已固定坐标维数 |
+| 内参不是 3×3 单通道矩阵 | estimate() 中的 camera_matrix.shape 检查 |
+| 名称数量与二维点数量不同 | KeypointObservation 的形状检查及 zip(strict=True) 的失败 |
+| 匹配点不足 4 对 | _matched_points() 的数量检查 |
+| RANSAC 失败或内点不足 4 个 | RANSAC produced fewer than four PnP inliers |
+| SQPnP 未返回解 | SQPnP failed |
+| 没有候选通过细化前后的正深度检查 | PnP rejected every candidate behind the camera |
+
+自定义提示使用中文。Python 的 ValueError 在这里对应 invalid_argument，RuntimeError 对应 runtime_error。OpenCV 自身的错误继续向上抛出；不额外添加有限值检查、重试或最终误差拒绝条件。
+
+### 编译
+
+CMake 已新增 pnp_solver 库和 OpenCV calib3d 组件。package.xml 中现有的 libopencv-dev 已覆盖 calib3d，因此只更新包描述。因为 KeypointObservation 定义在 detector.hpp 中，pnp_solver 复用 detector 的公开依赖；求解时不会创建或运行神经网络。
+
+在 Assembly_ws 下执行：
+
+```bash
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install --packages-select enginer_net
+source install/setup.bash
+```
+
+此外，本机将真实 C++ 求解器与港科 Python 做了 30 组数值/错误处理对照，包含不同点数与顺序、重复名称、畸变、浮点输入、噪声、异常点、平面模型和随机位姿。变换及误差在容差内一致。完整 Ubuntu colcon 构建、相机实测、TF 和基座坐标系位姿发布尚未验证或接入。

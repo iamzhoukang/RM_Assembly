@@ -2,7 +2,7 @@
 <package format="3">
   <name>enginer_net</name>
   <version>0.1.0</version>
-  <description>工程机器人 YOLO 与 LiteHRNet 感知算法库</description>
+  <description>工程机器人 YOLO、LiteHRNet 与 PnP 感知算法库</description>
   <maintainer email="16355965+lzhzhoukang@user.noreply.gitee.com">lzhros</maintainer>
   <license>Apache-2.0</license>
   <buildtool_depend>ament_cmake</buildtool_depend>

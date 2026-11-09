@@ -1,0 +1,26 @@
+net_node:
+  ros__parameters:
+    pose_solver:
+      schema: exchange_12pt
+      use_ransac: true
+      ransac_reprojection_error_px: 3.0
+      ransac_confidence: 0.99
+      ransac_iterations: 100
+
+    # 港科示例的兑换站三维点，坐标顺序 [x, y, z]，单位：米。
+    # ring 为目标坐标系原点，名称必须与 Detector 输出一致。
+    keypoint_schemas:
+      exchange_12pt:
+        points:
+          TL: [-0.100000, -0.040000, 0.040000]
+          TR: [-0.100000, 0.040000, 0.040000]
+          BL: [-0.100000, -0.040000, -0.040000]
+          BR: [-0.100000, 0.040000, -0.040000]
+          ring: [0.000000, 0.000000, 0.000000]
+          light_BR: [-0.112000, 0.114870, 0.035953]
+          light_TR: [-0.112000, 0.114870, 0.167312]
+          shell_R: [-0.112000, 0.084871, 0.276449]
+          shell_M: [-0.112000, 0.000000, 0.325449]
+          shell_L: [-0.112000, -0.084871, 0.276449]
+          light_TL: [-0.112000, -0.114870, 0.167312]
+          light_BL: [-0.112000, -0.114870, 0.035953]
