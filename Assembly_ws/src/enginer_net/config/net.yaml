@@ -3,3 +3,9 @@ net_node:
     yolo_model: "weights/yolo/v10.12/openvino_best/best.xml"
     yolo_device: "CPU"
     yolo_conf: 0.55
+    hrnet_model: "weights/litehr/litehrnet30_v11.0/openvino_best/hrnet_heatmap.xml"
+    hrnet_device: "CPU"
+    hrnet_input_size: [256, 256]
+    hrnet_mean: [123.675, 116.28, 103.53]
+    hrnet_std: [58.395, 57.12, 57.375]
+    bbox_padding: 1.10

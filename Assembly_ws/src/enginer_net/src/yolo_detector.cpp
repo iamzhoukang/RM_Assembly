@@ -34,7 +34,10 @@ namespace enginer_net
             }
         }
 
-        if(!std::filesystem::is_regular_file(path) || path.extension() != ".xml"){
+        std::string extension = path.extension().string();
+        std::transform(extension.begin(), extension.end(), extension.begin(),
+                       [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+        if(!std::filesystem::is_regular_file(path) || extension != ".xml"){
             throw std::runtime_error("模型文件不存在或不是XML文件: " + path.string());
         }
 
@@ -64,7 +67,7 @@ namespace enginer_net
         if(std::filesystem::exists(metadata_path)){
             auto metadata = YAML::LoadFile(metadata_path.string());
             const auto names = metadata["names"];
-            if(names && names.IsMap()){
+            if(!names || names.IsMap()){
                 names_.clear();
                 for(const auto& it : names){
                     names_[it.first.as<int>()] = it.second.as<std::string>();
@@ -76,7 +79,7 @@ namespace enginer_net
     YoloDetector::PreparedImage YoloDetector::preprocess(const cv::Mat& image_bgr)
     {
         if(image_bgr.empty() || image_bgr.type() != CV_8UC3){
-            throw std::runtime_error("输入图像必须是非空的CV_8UC3类型");
+            throw std::invalid_argument("输入图像必须是非空的CV_8UC3类型");
         }
 
         const double scale = std::min(
