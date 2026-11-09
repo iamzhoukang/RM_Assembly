@@ -7,7 +7,7 @@
                 "${workspaceFolder}/src/enginer_camera/include",
                 "${workspaceFolder}/src/enginer_camera/rb26SDK/include",
                 "${workspaceFolder}/src/enginer_net/include",
-                "/home/lzhros/.local/lib/python3.10/site-packages/openvino/include",
+                "${workspaceFolder}/../.third_party/openvino_install/runtime/include",
                 "/opt/ros/humble/include/action_msgs",
                 "/opt/ros/humble/include/action_tutorials_interfaces",
                 "/opt/ros/humble/include/actionlib_msgs",
@@ -134,7 +134,7 @@
                     "${workspaceFolder}/src/enginer_camera/include",
                     "${workspaceFolder}/src/enginer_camera/rb26SDK/include",
                     "${workspaceFolder}/src/enginer_net/include",
-                    "/home/lzhros/.local/lib/python3.10/site-packages/openvino/include",
+                    "${workspaceFolder}/../.third_party/openvino_install/runtime/include",
                     "/opt/MVS/include",
                     "/usr/include/opencv4",
                     "/opt/ros/humble/include"
