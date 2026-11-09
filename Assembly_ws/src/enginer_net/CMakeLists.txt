@@ -24,12 +24,15 @@ target_include_directories(litehr_detector PUBLIC
   ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(litehr_detector PUBLIC openvino::runtime ${OpenCV_LIBS})
 
-install(TARGETS yolo_detector litehr_detector
+add_library(detector src/detector.cpp)
+target_link_libraries(detector PUBLIC yolo_detector litehr_detector)
+
+install(TARGETS detector yolo_detector litehr_detector
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib)
 install(DIRECTORY include/ DESTINATION include)
 install(DIRECTORY config weights DESTINATION share/${PROJECT_NAME})
 ament_export_include_directories(include)
-ament_export_libraries(yolo_detector litehr_detector)
+ament_export_libraries(detector yolo_detector litehr_detector)
 ament_export_dependencies(OpenCV OpenVINO yaml-cpp)
 ament_package()

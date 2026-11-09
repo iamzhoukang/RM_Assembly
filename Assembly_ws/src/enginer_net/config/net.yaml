@@ -9,3 +9,19 @@ net_node:
     hrnet_mean: [123.675, 116.28, 103.53]
     hrnet_std: [58.395, 57.12, 57.375]
     bbox_padding: 1.10
+
+    # Detector：双网络编排，点的名称顺序必须与 LiteHRNet 输出通道一致。
+    bbox_class_id: 1
+    crop_margin: 0.0
+    keypoint_names: [TL, TR, BL, BR, ring, light_BR, light_TR, shell_R, shell_M, shell_L, light_TL, light_BL]
+
+    # 没有目标类别框时，整图 LiteHRNet 的粗定位参数。
+    fallback_score_threshold: 0.01
+    fallback_min_keypoints: 4
+    fallback_crop_margin: 0.5
+
+    # 最终输出给 PnP 的关键点筛选参数。
+    drop_low_confidence_keypoints: true
+    min_keypoint_score: 0.0
+    visibility_score_threshold: 0.60
+    min_visible_keypoints: 5

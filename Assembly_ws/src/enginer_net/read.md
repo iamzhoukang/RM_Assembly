@@ -1,6 +1,6 @@
 # enginer_net 算法阅读说明
 
-当前包含 YoloDetector 和 LiteHRDetector 两个普通 C++ 类。YOLO 返回原图检测框，LiteHRNet 接收原图及一个 xyxy 框，返回原图关键点和热图分数。两者使用 OpenVINO 同步推理，每个类实例顺序复用自己的 InferRequest。
+当前包含 YoloDetector、LiteHRDetector 和 Detector 三个普通 C++ 类。Detector 负责组织两个网络、选择目标并筛选关键点。YOLO 返回原图检测框，LiteHRNet 接收原图及一个 xyxy 框，返回原图关键点和热图分数。两者使用 OpenVINO 同步推理，每个类实例顺序复用自己的 InferRequest。
 
 ## 目录
 
@@ -8,10 +8,12 @@
 enginer_net/
 ├── include/
 │   ├── yolo_detector.hpp
-│   └── litehr_detector.hpp
+│   ├── litehr_detector.hpp
+│   └── detector.hpp
 ├── src/
 │   ├── yolo_detector.cpp
-│   └── litehr_detector.cpp
+│   ├── litehr_detector.cpp
+│   └── detector.cpp
 ├── config/net.yaml
 ├── weights/
 ├── CMakeLists.txt
@@ -93,7 +95,7 @@ PreparedImage 把本次输入 Tensor 和 inverse_affine 放在一起返回，避
 
 返回结果保持模型通道顺序，当前 12 点为 TL、TR、BL、BR、ring、light_BR、light_TR、shell_R、shell_M、shell_L、light_TL、light_BL。scores 保存原始热图峰值。模型通道数由输出读取，结果坐标按计算值返回。
 
-低分关键点剔除、最少可见点数量、检测类别选择和回退，属于港科 YoloHRNetBackend 及双网络编排层，后续在 detector 中接入。
+低分关键点剔除、最少可见点数量、检测类别选择和回退，已在 Detector 中接入，对应港科 YoloHRNetBackend 及 _YoloHRNetPipeline。
 
 ## YOLO 错误处理对照
 
@@ -125,7 +127,7 @@ names 行为也已对齐。metadata.yaml 不存在或 names 不是映射时保�
 
 ## 编译
 
-在 Assembly_ws 中运行下面命令，构建两个算法库。依赖为 OpenCV、yaml-cpp 和 OpenVINO C++ Runtime。
+在 Assembly_ws 中运行下面命令，构建三个算法库。依赖为 OpenCV、yaml-cpp 和 OpenVINO C++ Runtime。
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -140,3 +142,114 @@ CMake 找不到 OpenVINO 时，先加载本机 Runtime 环境，或在构建参�
 LiteHRNet 已通过真实 C++ 编译，并与港科 Python 实现进行 CPU 数值对照，覆盖原图内外的框、小数坐标、退化框、不同 padding、动态 batch 和空间维度、非正方形输入、浮点图像、热图边界、并列峰值和 NaN。真实 litehrnet30_v11.0 权重在多组框上输出的 12 点和分数也在容差内一致。
 
 模型 rank、通道、高度、宽度不符合配置的四种错误，两版均拒绝。Ubuntu 的完整 colcon 构建与真实画面精度仍需在你的设备上验证。
+
+
+## Detector：建议从这里开始抄写
+
+文件为 include/detector.hpp 和 src/detector.cpp。它把港科的 _YoloHRNetPipeline 与 YoloHRNetBackend 合在同一个普通 C++ 类里，复用已经完成的两个推理类。它接收一帧 BGR 图像，返回一组关键点观察结果。
+
+建议按以下顺序阅读和抄写：
+
+1. DetectorConfig：配置两个网络、目标类别、回退及点筛选参数。
+2. DetectionMetadata 与 KeypointObservation：先明确输出保存哪些内容。
+3. Detector 的构造函数：保存配置，并创建 YOLO、LiteHRNet。
+4. expandBBox()：按比例扩大框并裁到图像边界。
+5. keypointBBox()：利用整图粗定位结果生成回退框。
+6. predictInstances()：YOLO 检测、类别选择、必要时回退、逐框 LiteHRNet 推理。
+7. detect()：规范图像类型、选择最高 YOLO 分数目标、按名称取点并进行最终筛选。
+
+### 输入、调用与输出
+
+```cpp
+#include "detector.hpp"
+
+enginer_net::DetectorConfig config;
+config.yolo_model = "/绝对路径/yolo/best.xml";
+config.hrnet.model_path = "/绝对路径/litehr/hrnet_heatmap.xml";
+
+// 创建一次、顺序处理各帧；不要在每帧里重新加载模型。
+enginer_net::Detector detector(config);
+auto observation = detector.detect(image_bgr);
+```
+
+此处使用结构体默认值，其余参数可以在创建 detector 前逐项赋值。当前算法库不主动读取 net.yaml；后续 net_node 声明 ROS 参数、加载 YAML 后，需要把值填入 DetectorConfig，其中 hrnet_model 对应 config.hrnet.model_path，hrnet_input_size 对应 config.hrnet.input_size，其余 LiteHR 参数也填入 hrnet 成员。
+
+如果图像来自相机的 RGB8 消息，net_node 应先用 cv_bridge 转为 BGR8，再传入这里。Detector 不根据画面内容猜测颜色顺序。
+
+| 输出成员 | 类型 | 用途 |
+|---|---|---|
+| keypoints_2d | vector<Point2d> | 筛选后的原图二维坐标，供后续 PnP 使用 |
+| keypoint_names | vector<string> | 与坐标一一对应的名称，用于寻找三维模型点 |
+| confidences | vector<double> | 对应关键点的原始热图峰值 |
+| bbox_xyxy | Vec4f | 实际送入 LiteHRNet 的框，顺序 x1、y1、x2、y2 |
+| metadata | DetectionMetadata | 目标来源、YOLO 结果和筛选前的完整关键点，用于后续调试绘制 |
+
+metadata.status_keypoints_2d、status_keypoint_scores 和 status_keypoint_names 保存筛选前的点；selected_keypoint_names 与最终输出名称一致。metadata.yolo_detections 复用 YoloDetections 保存检测框和类别名称表；内容对应港科的检测字典列表。
+
+### 正常路径与回退路径
+
+```text
+BGR 图像 → YOLO
+  ├─ 完全没有检测框 → 抛出无目标异常
+  ├─ 有 bbox_class_id 对应的框 → crop_margin 扩框
+  └─ 有其他类别，但没有目标类别框
+       → 整图 LiteHRNet 粗定位
+       → 取分数 ≥ fallback_score_threshold 的点
+       → 至少 fallback_min_keypoints 个点，且能组成有效框
+       → fallback_crop_margin 扩框
+  ↓
+逐框 LiteHRNet → 选择 YOLO 分数最高的实例 → 按名称取点 → 最终置信度筛选
+```
+
+回退框的实例分数取整图粗定位的全部关键点分数均值，bbox_class_id 设为 -1，bbox_source 为 hrnet_fallback；正常检测对应 bbox_source 为 yolo。metadata.source 均为 yolo_hrnet。
+
+按原版先完成所有候选框的 LiteHRNet 推理，再选最高 YOLO 分数目标。该目标可见点不足时直接抛异常，不会改选分数第二的目标。
+
+### 两组置信度配置
+
+| 参数 | 当前值 | 生效位置 |
+|---|---|---|
+| fallback_score_threshold | 0.01 | 整图粗定位生成回退框 |
+| fallback_min_keypoints | 4 | 组成粗定位框的最少点数 |
+| fallback_crop_margin | 0.5 | 回退框每侧外扩原框宽/高的 50% |
+| crop_margin | 0.0 | 正常 YOLO 框外扩；独立于 LiteHR 的 bbox_padding |
+| drop_low_confidence_keypoints | true | 最终结果删除低分点 |
+| visibility_score_threshold | 0.60 | 最终保留分数大于等于此值的点 |
+| min_visible_keypoints | 5 | 最终保留点数不足时抛异常 |
+| min_keypoint_score | 0.0 | 不删除低分点时，任意点低于此值则整次失败 |
+
+这些编排参数采用港科示例系统配置；YOLO 置信度仍保留本项目的 0.55。visibility_score_threshold 使用 optional<double> 表示可选值；设为 std::nullopt 时按港科规则改用 min_keypoint_score。默认 0.60 已有值，直接使用即可。
+
+### Detector 的头文件与错误处理
+
+| 头文件 | 使用位置与作用 |
+|---|---|
+| optional | 可选可见性阈值；keypointBBox() 用 nullopt 表示粗定位没有有效框 |
+| string、vector | 配置、点名、候选实例和输出数组 |
+| litehr_detector.hpp、yolo_detector.hpp | 组合已有推理类及其数据类型 |
+| algorithm | clamp 限制坐标、min/max 求框、max_element 选择目标 |
+| cmath | isfinite 检查回退框坐标；isnan 对齐原版数值处理 |
+| map | 按名称查找关键点索引，同名时使用最后一个索引 |
+| numeric | accumulate 计算回退粗定位分数之和 |
+| limits | infinity 作为最小分数统计初值 |
+| iomanip、sstream | 保持低分异常中三位小数的格式 |
+| stdexcept | runtime_error、invalid_argument、out_of_range |
+| utility | move 将逐框推理结果放入候选实例，避免复制点数组 |
+
+| 失败条件 | 与港科的对应关系 |
+|---|---|
+| 图像不是二维三通道 | _as_bgr_image() 的 H×W×3 检查；非 uint8 图像先裁剪到 0～255 再截断转换 |
+| 没有实例，包括粗定位不能组成框 | detect() 的 found no target instance |
+| 最终可见点不足 | visible keypoints below threshold |
+| 关闭删点但有点低于最低分数 | keypoint score below threshold |
+| 点和分数数量不同 | _select_keypoints_by_name() 的长度检查；回退路径也对应 NumPy 布尔索引的长度要求 |
+| 配置点名索引超过模型点数 | NumPy 索引会失败；C++ 显式抛 out_of_range，避免越界访问 |
+| 配置要求 0 个粗定位点且实际没有点 | NumPy 对空数组求 min/max 会失败，C++ 显式对应该失败条件 |
+
+模型加载、推理和 OpenCV 错误继续向调用者传播。Detector 自己抛出的异常提示已改为中文，异常类型与触发条件保持原版语义。这里不吞异常、不增加重试或 ROS 日志；后续由 net_node 捕获异常，通过 RCLCPP_WARN/ERROR 打印 e.what()。OpenVINO、OpenCV 等第三方库抛出的原始异常继续向上传递。C++ 固定类型已经表达的 Nx2 坐标和四元素框，不重复进行 Python 数组形状检查。
+
+### 本次 Detector 验证
+
+已将真实 C++ Detector 与港科 Python 的 YoloHRNetBackend 做 23 组对照，覆盖正常多框、扩框、整图回退、空检测、粗定位失败、可见点不足、关闭删点、最低分数失败、名称子集/重复/越界、空名称、可选阈值、非法通道与浮点图像转换。正常、回退、浮点图像三组使用项目真实 LiteHRNet 权重；其余使用可控输出的 OpenVINO 测试模型。
+
+关键点坐标、分数、框和调试元数据在数值容差内一致，主要业务异常触发条件一致；当前提示已改为中文，最初对照时使用与港科相同的英文消息。NumPy 隐式失败在 C++ 中使用相应的安全异常表达，类型和措辞不要求逐字相同。完整 ROS 2 构建、相机联调、PnP 与位姿发布尚未验证或接入。
