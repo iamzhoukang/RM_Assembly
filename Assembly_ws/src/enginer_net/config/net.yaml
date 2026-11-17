@@ -1,5 +1,19 @@
 net_node:
   ros__parameters:
+    # 单目原图输入，必须与相机发布的 frame_id 一致。
+    image_topic: "/image_raw"
+    camera_info_topic: "/camera_info"
+    camera_frame: "camera_optical"
+    pose_topic: "/exchange_pose"
+    status_topic: "/perception/status"
+    publish_tf: true
+    target_frame: "exchange_target"
+
+    # 调试绘制只修改图像副本；FPS 为处理帧率。
+    show_window: true
+    publish_annotated_image: false
+    annotated_image_topic: "/perception/annotated_image"
+  
     yolo_model: "weights/yolo/v10.12/openvino_best/best.xml"
     yolo_device: "CPU"
     yolo_conf: 0.55

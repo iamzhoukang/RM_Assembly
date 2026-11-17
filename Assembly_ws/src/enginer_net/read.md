@@ -1,6 +1,6 @@
 # enginer_net 算法阅读说明
 
-当前包含 YoloDetector、LiteHRDetector、Detector 和 PnpSolver 四个普通 C++ 类。Detector 负责组织两个网络、选择目标并筛选关键点。YOLO 返回原图检测框，LiteHRNet 接收原图及一个 xyxy 框，返回原图关键点和热图分数。两者使用 OpenVINO 同步推理，每个类实例顺序复用自己的 InferRequest。
+当前包含 YoloDetector、LiteHRDetector、Detector 和 PnpSolver 四个普通 C++ 算法类，以及负责 ROS 2 接入的 NetNode。Detector 负责组织两个网络、选择目标并筛选关键点。YOLO 返回原图检测框，LiteHRNet 接收原图及一个 xyxy 框，返回原图关键点和热图分数。两者使用 OpenVINO 同步推理，每个类实例顺序复用自己的 InferRequest。
 
 ## 目录
 
@@ -15,13 +15,15 @@ enginer_net/
 │   ├── yolo_detector.cpp
 │   ├── litehr_detector.cpp
 │   ├── detector.cpp
-│   └── pnp_solver.cpp
+│   ├── pnp_solver.cpp
+│   └── net_node.cpp
 ├── tools/
 │   ├── detector_example.cpp
 │   └── example.jpg
 ├── config/
 │   ├── net.yaml
 │   └── pnp.yaml
+├── launch/net.launch.py
 ├── weights/
 ├── CMakeLists.txt
 ├── package.xml
@@ -52,7 +54,7 @@ LiteHRConfig 的 input_size 为 cv::Size，mean、std 为 cv::Vec3f，分别在�
 | std | 58.395、57.12、57.375 | RGB 标准差 |
 | bbox_padding | 1.10 | 裁剪区域的扩张比例，取自港科示例运行配置 |
 
-config/net.yaml 已补充 hrnet_model、hrnet_device、hrnet_input_size、hrnet_mean、hrnet_std、bbox_padding，沿用港科配置名。当前算法类接收 LiteHRConfig；YAML 由后续 net_node 读取，再逐项填入结构体。直接创建类时使用的是传入结构体的值。
+config/net.yaml 已补充 hrnet_model、hrnet_device、hrnet_input_size、hrnet_mean、hrnet_std、bbox_padding，沿用港科配置名。当前算法类接收 LiteHRConfig；YAML 由 launch 传入 net_node，节点声明 ROS 参数并读取，再逐项填入结构体。直接创建类时使用的是传入结构体的值。
 
 ## 头文件与函数
 
@@ -179,7 +181,7 @@ enginer_net::Detector detector(config);
 auto observation = detector.detect(image_bgr);
 ```
 
-此处使用结构体默认值，其余参数可以在创建 detector 前逐项赋值。当前算法库不主动读取 net.yaml；后续 net_node 声明 ROS 参数、加载 YAML 后，需要把值填入 DetectorConfig，其中 hrnet_model 对应 config.hrnet.model_path，hrnet_input_size 对应 config.hrnet.input_size，其余 LiteHR 参数也填入 hrnet 成员。
+此处使用结构体默认值，其余参数可以在创建 detector 前逐项赋值。当前算法库不主动读取 net.yaml；net_node 声明 ROS 参数、接收 YAML 配置后，将值填入 DetectorConfig，其中 hrnet_model 对应 config.hrnet.model_path，hrnet_input_size 对应 config.hrnet.input_size，其余 LiteHR 参数也填入 hrnet 成员。
 
 如果图像来自相机的 RGB8 消息，net_node 应先用 cv_bridge 转为 BGR8，再传入这里。Detector 不根据画面内容猜测颜色顺序。
 
@@ -253,7 +255,7 @@ BGR 图像 → YOLO
 | 配置点名索引超过模型点数 | NumPy 索引会失败；C++ 显式抛 out_of_range，避免越界访问 |
 | 配置要求 0 个粗定位点且实际没有点 | NumPy 对空数组求 min/max 会失败，C++ 显式对应该失败条件 |
 
-模型加载、推理和 OpenCV 错误继续向调用者传播。Detector 自己抛出的异常提示已改为中文，异常类型与触发条件保持原版语义。这里不吞异常、不增加重试或 ROS 日志；后续由 net_node 捕获异常，通过 RCLCPP_WARN/ERROR 打印 e.what()。OpenVINO、OpenCV 等第三方库抛出的原始异常继续向上传递。C++ 固定类型已经表达的 Nx2 坐标和四元素框，不重复进行 Python 数组形状检查。
+模型加载、推理和 OpenCV 错误继续向调用者传播。Detector 自己抛出的异常提示已改为中文，异常类型与触发条件保持原版语义。这里不吞异常、不增加重试或 ROS 日志；由 net_node 捕获当帧推理异常，通过 RCLCPP_WARN/ERROR 打印 e.what()。OpenVINO、OpenCV 等第三方库抛出的原始异常继续向上传递。C++ 固定类型已经表达的 Nx2 坐标和四元素框，不重复进行 Python 数组形状检查。
 
 ### 本次 Detector 验证
 
@@ -307,7 +309,7 @@ pnp.yaml 中，pose_solver 保存 schema 名称及四个 RANSAC 参数，keypoin
 
 PnpConfig.object_points 使用 map<string, Point3d>，每个值在类型上固定为三个坐标，对应原版构造函数对三维点形状的检查。若从 YAML 的可变长数组构造 Point3d，应先检查有三个元素。
 
-算法库接收 PnpConfig，不主动读取文件。未来 net_node 加载配置并填入结构体：
+算法库接收 PnpConfig，不主动读取文件。net_node 加载配置并填入结构体：
 
 | YAML 字段 | C++ 配置 |
 |---|---|
@@ -399,4 +401,150 @@ colcon build --symlink-install --packages-select enginer_net
 source install/setup.bash
 ```
 
-此外，本机将真实 C++ 求解器与港科 Python 做了 30 组数值/错误处理对照，包含不同点数与顺序、重复名称、畸变、浮点输入、噪声、异常点、平面模型和随机位姿。变换及误差在容差内一致。完整 Ubuntu colcon 构建、相机实测、TF 和基座坐标系位姿发布尚未验证或接入。
+此外，本机将真实 C++ 求解器与港科 Python 做了 30 组数值/错误处理对照，包含不同点数与顺序、重复名称、畸变、浮点输入、噪声、异常点、平面模型和随机位姿。变换及误差在容差内一致。net_node 已接入相机坐标系下的位姿和 TF 发布；完整 Ubuntu colcon 构建、相机实测及基座坐标系转换仍需后续验证。
+
+
+## NetNode：实时感知入口
+
+src/net_node.cpp 沿用 camera_node 的单文件类写法，使用 lambda 订阅回调；算法代码继续保留在已有的四个类中。launch/net.launch.py 将 net.yaml 和 pnp.yaml 一起传入名为 net_node 的节点。
+
+建议按以下顺序学习和抄写：
+
+1. 成员变量：两个算法对象、CameraInfo 缓存、订阅者和发布者。
+2. loadDetectorConfig()：将 ROS 参数填入 DetectorConfig；相对模型路径以包的 share 目录为起点，绝对路径保持有效。
+3. loadPnpConfig()：读取求解参数和所选 schema 的全部三维点。
+4. 构造函数：创建一次模型、求解器和 ROS 接口，lambda 回调转交 onImage()。
+5. onImage()：检查帧、转换颜色、检测、PnP、发布结果和调试状态。
+6. publishPose()：将相机 ← 目标的矩阵转换成 PoseStamped 和 TransformStamped。
+7. showDebug()：在图像副本上绘制并显示/发布。
+8. main()：初始化 ROS、单线程 spin 和退出清理。
+
+### 参数如何传进来
+
+本节点使用 ROS 参数系统，启动文件负责加载 YAML；不再在节点内用 YAML::LoadFile 重复解析。嵌套字段会展开为带点的名字，例如：
+
+```text
+pose_solver.use_ransac
+keypoint_schemas.exchange_12pt.points.TL
+```
+
+loadPnpConfig() 遍历 get_parameter_overrides() 中前缀匹配所选 schema 的参数，逐项声明为 double 数组，再构造 Point3d。这样三维模型独立于本帧可见点和 Detector 名称子集，完整保存配置的模型点。数组不是三个坐标时按原版的三维点形状约束报错；未加载三维点配置时，由 PnpSolver 拒绝空模型。
+
+LiteHR 输入尺寸、均值及标准差长度检查对应港科原版的配置检查。模型路径、输入形状、检测阈值、点数检查、RANSAC 和正深度检查继续由已有算法类负责。
+
+三维坐标数组使用浮点数写法，例如 0.0，保持 ROS 参数数组类型一致。参数在启动时读取；修改 YAML 后重启节点生效，不提供运行时重新加载模型。
+
+### 单帧处理流程
+
+```text
+/image_raw + 缓存的 /camera_info
+    ↓
+核对 image/CameraInfo 的 frame_id 与 camera_frame
+    ↓
+cv_bridge：RGB8 → BGR8
+    ↓
+Detector.detect()：框与二维点
+    ↓
+CameraInfo.k → 内参 K，CameraInfo.d → 畸变 D
+    ↓
+PnpSolver.estimate()：相机 ← 兑换站
+    ↓
+/exchange_pose + /tf + /perception/status
+    ↓
+在副本上绘制，可选显示或发布调试图
+```
+
+当前相机发布未去畸变的 RGB8 原图，因此使用原始 K、D，不使用 CameraInfo.r、p。图像进入 Detector 前转换为 BGR8。没有收到 CameraInfo 时等待下一帧。当前只缓存最近一次 CameraInfo，适用于固定成像模式的单相机内参；图像和标定必须对应同一分辨率、裁剪、翻转/镜像设置。
+
+### 默认接口
+
+| 名称 | 类型 | 含义 |
+|---|---|---|
+| /image_raw | sensor_msgs/Image | 相机原图输入 |
+| /camera_info | sensor_msgs/CameraInfo | 同一相机的标定参数输入 |
+| /exchange_pose | geometry_msgs/PoseStamped | 目标在 camera_optical 中的位姿，平移单位米 |
+| /perception/status | std_msgs/String | ok 或 perception_failed: 错误信息 |
+| /tf | tf2_msgs/TFMessage | camera_optical → exchange_target，publish_tf 控制开关 |
+| /perception/annotated_image | sensor_msgs/Image | 可选 BGR8 调试图，默认关闭 |
+
+PoseStamped 和 TF 都沿用输入图像的时间戳及父坐标系，不使用推理完成时间代替。矩阵的旋转部分用 tf2::Matrix3x3 转成归一化四元数。目标原点为 pnp.yaml 中的 ring 点。两个输入使用 SensorDataQoS、keep_last(1)，单线程顺序复用推理请求；推理慢时允许丢弃排队旧帧，以控制积压。
+
+### 失败处理及港科对照
+
+| 情况 | 行为 |
+|---|---|
+| 模型路径、模型加载或三维点配置错误 | 启动失败，中文 FATAL 日志后非零退出 |
+| 未收到 CameraInfo | 等待，不运行本帧推理 |
+| 图像/CameraInfo 帧与 camera_frame 不一致 | 对应港科帧检查，抛出异常并退出节点 |
+| 图像转换异常 | 向上传递，主函数记录后退出 |
+| 检测或 PnP 当帧失败 | 发布失败状态、节流中文 WARN；本帧不发布位姿或 TF |
+| 检测成功但 PnP 失败 | 调试副本保留检测框和关键点，状态为 pnp_failed |
+| 求解成功 | 发布位姿、可选 TF、ok 状态和调试图 |
+
+没有额外添加最终重投影误差拒绝规则，算法错误条件保持前述港科实现。调试绘制跳过非有限坐标，避免 NaN 转整型像素导致绘制错误；这不改变算法输出。
+
+港科 Host 同时支持左右相机选择、虚拟云台、预热及利用已有 TF 转换到 arm_base。本版按当前单 CS016 的范围接入相机坐标系，并增加已约定的目标 TF 广播；尚不执行基座坐标转换，也没有搬入双相机/云台控制。可选调试图发布及当帧失败保留观察结果的处理方式参考港科 Host。
+
+### 显示内容和帧率
+
+黄色框为 LiteHRNet 实际使用的框，蓝色细框为 YOLO 检测框；关键点显示名称和原始热图分数，达到可见性阈值为绿色，低于阈值为红色。高分点并不表示一定是 RANSAC 内点，此图没有绘制 RANSAC 内点标记。
+
+画面标题显示 detect_failed、pnp_failed 或 ok，以及 processing FPS 和本帧处理耗时；成功时显示相机坐标系下的 xyz(m) 和全部匹配点的平均重投影误差。
+
+processing FPS 用相邻开始处理图像回调的间隔计算，第一帧显示 0；这是节点实际处理频率，包含相机到帧间隔、上帧推理和显示等影响，不代表相机硬件帧率。耗时统计从颜色转换前开始，到推理和状态/位姿发布后结束，不含当前帧的绘制显示。show_window=false 且未开启调试图发布时跳过绘制，原始图像始终不修改。
+
+OpenCV 默认字体不能正确绘制中文，因此画面使用英文短状态；错误详情通过中文日志及状态话题输出。
+
+### 编译、启动及查看结果
+
+在 Assembly_ws 中编译并加载环境：
+
+```bash
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install --packages-select enginer_camera enginer_net
+source install/setup.bash
+```
+
+第一个终端启动相机：
+
+```bash
+ros2 launch enginer_camera camera_launch.py
+```
+
+第二个终端加载相同环境后启动感知：
+
+```bash
+ros2 launch enginer_net net.launch.py
+```
+
+无图形桌面时关闭窗口：
+
+```bash
+ros2 launch enginer_net net.launch.py show_window:=false
+```
+
+也可以直接运行可执行文件，但必须加载两份参数，尤其是 pnp.yaml 的三维点模型：
+
+```bash
+ros2 run enginer_net net_node --ros-args \
+  --params-file src/enginer_net/config/net.yaml \
+  --params-file src/enginer_net/config/pnp.yaml
+```
+
+查看输出：
+
+```bash
+ros2 topic echo /exchange_pose
+ros2 topic echo /perception/status
+ros2 run tf2_ros tf2_echo camera_optical exchange_target
+```
+
+修改 camera_frame 时，需要与相机节点的 frame_id 同步；目标帧 exchange_target 应由本节点唯一发布。每帧失败时停止发送新结果，TF 缓存可能仍保留上一帧变换，消费者应使用时间戳及状态判断是否有效。
+
+### 当前完成范围与验证边界
+
+这一版代码完成 net 包的单目实时感知主链路，包含模型与几何参数加载、图像/内参接入、Detector/PnP 调用、相机坐标位姿和 TF、状态及调试显示。要确认可用于你的机器人，仍需在 Ubuntu 完成构建及相机联调。相机平行连杆运动学、手眼标定、arm_base 转换、机械臂规划与串口控制属于后续模块。
+
+本机没有 ROS 2，验证使用模拟 ROS 消息/订阅/发布与 cv_bridge 接口、真实 tf2 数学头文件及真实 OpenVINO 算法，检查参数映射、RGB 转 BGR、图像不被污染、位姿/TF 方向和时间戳、等待 CameraInfo、无目标、PnP 失败和帧不匹配分支。
+
+验证用的数据集 example.jpg 与当前 CS016 标定不配套，不能用于验证物理位姿精度。消息发布的正向验证仅在验证夹具中关闭 RANSAC，并与直接调用相同算法比较；交付的 pnp.yaml 未修改，仍为 RANSAC=true、3 像素阈值。本验证不等同于 ROS 2 完整编译、DDS 通信、真实 TF 广播、GUI 或实机准确性验证。没有向仓库添加测试程序。

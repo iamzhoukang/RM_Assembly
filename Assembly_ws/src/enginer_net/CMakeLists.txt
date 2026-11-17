@@ -5,12 +5,19 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# 源码编译的 OpenVINO 装在 .third_party 下，不在系统库路径里。
+# 源码编译的 OpenVINO 可能不在系统库路径里。
 # 把所链接共享库的目录写进 RPATH，这样装出来的二进制不用 source setupvars.sh 也能跑。
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
 
 find_package(ament_cmake REQUIRED)
 find_package(ament_index_cpp REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
 find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs highgui calib3d)
 
 # OpenVINO 优先用环境里的；找不到就回退到用户目录下的源码编译版本（ABI=1）。
@@ -50,18 +57,23 @@ target_link_libraries(detector PUBLIC yolo_detector litehr_detector)
 add_library(pnp_solver src/pnp_solver.cpp)
 target_link_libraries(pnp_solver PUBLIC detector ${OpenCV_LIBS})
 
+add_executable(net_node src/net_node.cpp)
+ament_target_dependencies(net_node
+  rclcpp sensor_msgs geometry_msgs std_msgs cv_bridge tf2 tf2_ros ament_index_cpp)
+target_link_libraries(net_node pnp_solver detector ${OpenCV_LIBS})
+
 add_executable(detector_example tools/detector_example.cpp)
 ament_target_dependencies(detector_example ament_index_cpp)
 target_link_libraries(detector_example detector ${OpenCV_LIBS})
 
-install(TARGETS detector_example DESTINATION lib/${PROJECT_NAME})
+install(TARGETS net_node detector_example DESTINATION lib/${PROJECT_NAME})
 install(FILES tools/example.jpg DESTINATION share/${PROJECT_NAME}/tools)
 
 install(TARGETS pnp_solver detector yolo_detector litehr_detector
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib)
 install(DIRECTORY include/ DESTINATION include)
-install(DIRECTORY config weights DESTINATION share/${PROJECT_NAME})
+install(DIRECTORY config weights launch DESTINATION share/${PROJECT_NAME})
 ament_export_include_directories(include)
 ament_export_libraries(pnp_solver detector yolo_detector litehr_detector)
 ament_export_dependencies(OpenCV OpenVINO yaml-cpp)
