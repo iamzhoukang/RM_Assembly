@@ -1,21 +1,21 @@
 net_node:
   ros__parameters:
     pose_solver:
-      schema: exchange_12pt
-      use_ransac: true
-      ransac_reprojection_error_px: 3.0
-      ransac_confidence: 0.99
-      ransac_iterations: 100
+      schema: exchange_12pt  # 选用下方哪个三维点模型
+      use_ransac: true  # 先用 RANSAC 筛内点，再求位姿
+      ransac_reprojection_error_px: 3.0  # RANSAC 判作内点的像素误差阈值
+      ransac_confidence: 0.99  # RANSAC 置信度
+      ransac_iterations: 100  # RANSAC 最大迭代次数
 
     # ring 为目标坐标系原点，名称必须与 Detector 输出一致。
     keypoint_schemas:
       exchange_12pt:
-        points:
+        points:  # 按点名匹配二维点，三维坐标 [x, y, z] 单位米
           TL: [-0.100000, -0.040000, 0.040000]
           TR: [-0.100000, 0.040000, 0.040000]
           BL: [-0.100000, -0.040000, -0.040000]
           BR: [-0.100000, 0.040000, -0.040000]
-          ring: [0.000000, 0.000000, 0.000000]
+          ring: [0.000000, 0.000000, 0.000000]  # 兑换站坐标系原点
           light_BR: [-0.112000, 0.114870, 0.035953]
           light_TR: [-0.112000, 0.114870, 0.167312]
           shell_R: [-0.112000, 0.084871, 0.276449]

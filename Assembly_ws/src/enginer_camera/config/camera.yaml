@@ -1,11 +1,11 @@
 camera_node:
   ros__parameters:
-    serial_number: "DA9784621" 
-    exposure_time: 8000
-    gain: 0.3
-    gamma: 1.0
-    auto_white_balance: true
-    camera_flip: false
-    camera_mirror: false
-    period_ms: 33
-    frame_id: "camera_optical"
+    serial_number: "DA9784621"  # 海康相机序列号，换相机时更新
+    exposure_time: 8000  # 曝光时间，单位微秒
+    gain: 0.3  # 增益比例 0~1，映射到设备的增益范围
+    gamma: 1.0  # 亮度曲线，1.0 表示线性
+    auto_white_balance: true  # 是否开启自动白平衡
+    camera_flip: false  # 上下翻转，须与标定时一致
+    camera_mirror: false  # 左右镜像，须与标定时一致
+    period_ms: 33  # ROS 取帧定时器周期，单位 ms
+    frame_id: "camera_optical"  # 光学坐标系名，与 net.yaml 的 camera_frame 一致

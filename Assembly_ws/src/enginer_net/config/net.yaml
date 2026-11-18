@@ -1,41 +1,41 @@
 net_node:
   ros__parameters:
-    # 单目原图输入，必须与相机发布的 frame_id 一致。
-    image_topic: "/image_raw"
-    camera_info_topic: "/camera_info"
-    camera_frame: "camera_optical"
-    pose_topic: "/exchange_pose"
-    status_topic: "/perception/status"
-    publish_tf: true
-    target_frame: "exchange_target"
+    image_topic: "/image_raw"  # 原图订阅话题
+    camera_info_topic: "/camera_info"  # 相机标定信息订阅话题
+    camera_frame: "camera_optical"  # 须与 Image 和 CameraInfo 的 frame_id 一致
+    output_frame: "arm_base"  # 位姿输出坐标系，测单相机时可设为 camera_optical
+    pose_topic: "/exchange_pose"  # 兑换站位姿发布话题
+    status_topic: "/perception/status"  # 检测、PnP 与 TF 转换状态话题
+    publish_tf: true  # 是否广播相机到兑换站的 TF
+    target_frame: "exchange_target"  # 兑换站 TF 的子坐标系名
 
     # 调试绘制只修改图像副本；FPS 为处理帧率。
-    show_window: true
-    publish_annotated_image: false
-    annotated_image_topic: "/perception/annotated_image"
+    show_window: true  # 显示调试窗口，launch 启动时由同名参数覆盖
+    publish_annotated_image: false  # 是否发布带标注的图像
+    annotated_image_topic: "/perception/annotated_image"  # 标注图像发布话题
   
-    yolo_model: "weights/yolo/v10.12/openvino_best/best.xml"
-    yolo_device: "CPU"
-    yolo_conf: 0.55
-    hrnet_model: "weights/litehr/litehrnet30_v11.0/openvino_best/hrnet_heatmap.xml"
-    hrnet_device: "CPU"
-    hrnet_input_size: [256, 256]
-    hrnet_mean: [123.675, 116.28, 103.53]
-    hrnet_std: [58.395, 57.12, 57.375]
-    bbox_padding: 1.10
+    yolo_model: "weights/yolo/v10.12/openvino_best/best.xml"  # YOLO OpenVINO 模型路径，可相对包共享目录
+    yolo_device: "CPU"  # YOLO 推理设备
+    yolo_conf: 0.55  # 保留检测框的最低置信度
+    hrnet_model: "weights/litehr/litehrnet30_v11.0/openvino_best/hrnet_heatmap.xml"  # LiteHRNet OpenVINO 模型路径，可相对包共享目录
+    hrnet_device: "CPU"  # LiteHRNet 推理设备
+    hrnet_input_size: [256, 256]  # 输入 [宽, 高]，须与权重匹配
+    hrnet_mean: [123.675, 116.28, 103.53]  # RGB 各通道均值，须与训练预处理匹配
+    hrnet_std: [58.395, 57.12, 57.375]  # RGB 各通道标准差，须与训练预处理匹配
+    bbox_padding: 1.10  # LiteHRNet 裁剪时框宽高的缩放倍率
 
     # Detector：双网络编排，点的名称顺序必须与 LiteHRNet 输出通道一致。
-    bbox_class_id: 1
-    crop_margin: 0.0
-    keypoint_names: [TL, TR, BL, BR, ring, light_BR, light_TR, shell_R, shell_M, shell_L, light_TL, light_BL]
+    bbox_class_id: 1  # 模型中兑换站的类别 ID
+    crop_margin: 0.0  # YOLO 框每侧外扩比例，0 表示原框
+    keypoint_names: [TL, TR, BL, BR, ring, light_BR, light_TR, shell_R, shell_M, shell_L, light_TL, light_BL]  # 名称顺序与 LiteHRNet 输出通道一致
 
     # 没有目标类别框时，整图 LiteHRNet 的粗定位参数。
-    fallback_score_threshold: 0.01
-    fallback_min_keypoints: 4
-    fallback_crop_margin: 0.5
+    fallback_score_threshold: 0.01  # 整图粗定位时保留关键点的最低分数
+    fallback_min_keypoints: 4  # 组成粗定位框所需的最少关键点
+    fallback_crop_margin: 0.5  # 粗定位框每侧外扩比例
 
     # 最终输出给 PnP 的关键点筛选参数。
-    drop_low_confidence_keypoints: true
-    min_keypoint_score: 0.0
-    visibility_score_threshold: 0.60
-    min_visible_keypoints: 5
+    drop_low_confidence_keypoints: true  # 是否逐个丢掉低可见分的点
+    min_keypoint_score: 0.0  # 关闭逐点剔除时，所有点须达到的最低分数
+    visibility_score_threshold: 0.60  # 开启逐点剔除时，每个点的保留阈值
+    min_visible_keypoints: 5  # 开启逐点剔除时，送入 PnP 的最少点数

@@ -22,7 +22,11 @@
 #include <std_msgs/msg/header.hpp>
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2/LinearMath/Quaternion.h>
+#include <tf2/exceptions.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <tf2_ros/buffer.hpp>
 #include <tf2_ros/transform_broadcaster.h>
+#include <tf2_ros/transform_listener.hpp>
 
 #include "detector.hpp"
 #include "pnp_solver.hpp"
@@ -38,6 +42,7 @@ public:
         const auto image_topic = declare_parameter<std::string>("image_topic", "/image_raw");
         const auto info_topic = declare_parameter<std::string>("camera_info_topic", "/camera_info");
         camera_frame_ = declare_parameter<std::string>("camera_frame", "camera_optical");
+        output_frame_ = declare_parameter<std::string>("output_frame", camera_frame_);
         target_frame_ = declare_parameter<std::string>("target_frame", "exchange_target");
         show_window_ = declare_parameter<bool>("show_window", true);
         publish_tf_ = declare_parameter<bool>("publish_tf", true);
@@ -51,6 +56,12 @@ public:
         status_pub_ = create_publisher<std_msgs::msg::String>(status_topic, 10);
         if (publish_tf_) {
             tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+        }
+
+        if (output_frame_ != camera_frame_) {
+            tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
+            // 独立线程接收 TF，等待查询期间仍可更新缓存。
+            tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_, this, true);
         }
 
         const auto qos = rclcpp::SensorDataQoS().keep_last(1);
@@ -72,7 +83,7 @@ public:
             cv::namedWindow("Engineer perception", cv::WINDOW_NORMAL);
         }
         RCLCPP_INFO(get_logger(), "感知节点已启动，图像=%s，位姿=%s，坐标系=%s",
-                    image_topic.c_str(), pose_topic.c_str(), camera_frame_.c_str());
+                    image_topic.c_str(), pose_topic.c_str(), output_frame_.c_str());
     }
 
     ~NetNode() override
@@ -179,7 +190,6 @@ private:
         pose.pose.orientation.y = quaternion.y();
         pose.pose.orientation.z = quaternion.z();
         pose.pose.orientation.w = quaternion.w();
-        pose_pub_->publish(pose);
 
         if (publish_tf_) {
             geometry_msgs::msg::TransformStamped transform;
@@ -191,6 +201,22 @@ private:
             transform.transform.rotation = pose.pose.orientation;
             tf_broadcaster_->sendTransform(transform);
         }
+
+        if (!tf_buffer_) {
+            pose_pub_->publish(pose);
+            return;
+        }
+
+        if (header.stamp.sec == 0 && header.stamp.nanosec == 0) {
+            throw tf2::InvalidArgumentException("图像时间戳为 0，无法按采集时刻查找 TF");
+        }
+        const auto output_from_camera = tf_buffer_->lookupTransform(
+            output_frame_, header.frame_id, rclcpp::Time(header.stamp),
+            rclcpp::Duration::from_seconds(0.05));
+        geometry_msgs::msg::PoseStamped output_pose;
+        tf2::doTransform(pose, output_pose, output_from_camera);
+        output_pose.header.stamp = header.stamp;
+        pose_pub_->publish(output_pose);
     }
 
     void onImage(sensor_msgs::msg::Image::ConstSharedPtr msg)
@@ -235,7 +261,13 @@ private:
                                  "本帧感知失败：%s", error.what());
         }
         if (solved) {
-            publishPose(msg->header, pose);
+            try {
+                publishPose(msg->header, pose);
+            } catch (const tf2::TransformException& error) {
+                phase = "tf_unavailable";
+                status.data = "tf_unavailable: " + output_frame_ + " <- " +
+                              msg->header.frame_id + "，" + error.what();
+            }
         }
         status_pub_->publish(status);
         const double elapsed_ms = std::chrono::duration<double, std::milli>(
@@ -281,7 +313,7 @@ private:
                     0.6, cv::Scalar(0, 255, 255), 2, cv::LINE_AA);
         if (pose) {
             const auto& t = pose->transform;
-            const auto line = cv::format("xyz(m): %.3f %.3f %.3f | reproj: %.3f px",
+            const auto line = cv::format("camera xyz(m): %.3f %.3f %.3f | reproj: %.3f px",
                                          t(0, 3), t(1, 3), t(2, 3), pose->reprojection_error_px);
             cv::putText(display, line, cv::Point(15, 55), cv::FONT_HERSHEY_SIMPLEX,
                         0.6, cv::Scalar(0, 255, 255), 2, cv::LINE_AA);
@@ -304,7 +336,10 @@ private:
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status_pub_;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr debug_pub_;
     std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+    std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+    std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
     std::string camera_frame_;
+    std::string output_frame_;
     std::string target_frame_;
     bool show_window_ = true;
     bool publish_tf_ = true;

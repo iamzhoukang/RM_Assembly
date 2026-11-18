@@ -2,23 +2,23 @@
 # 标定板:11x8 内角点 / 方格 30 mm;有效样本 64 帧;2026-11-17
 # 分辨率 1440x1080,针孔模型 + plumb_bob 畸变(k3 固定为 0)
 # 等效焦距 ≈ 6.15 mm(fx × 3.45 µm 像元);重投影误差该工具未输出
-image_width: 1440
-image_height: 1080
-camera_name: camera
-camera_matrix:
+image_width: 1440  # 标定图像宽度，单位 px
+image_height: 1080  # 标定图像高度，单位 px
+camera_name: camera  # 标定文件中的相机名称
+camera_matrix:  # 原图内参 K，由标定生成
   rows: 3
   cols: 3
   data: [1783.132936, 0.0, 717.642320, 0.0, 1780.374355, 545.860331, 0.0, 0.0, 1.0]
-distortion_model: plumb_bob
-distortion_coefficients:
+distortion_model: plumb_bob  # 畸变模型，须与 D 对应
+distortion_coefficients:  # 原图畸变 D，顺序为 k1、k2、p1、p2、k3
   rows: 1
   cols: 5
   data: [-0.21083385, 0.17361844, -0.00163090, -0.00105028, 0.0]
-rectification_matrix:
+rectification_matrix:  # 标准标定字段 R，原图 PnP 只读取 K、D
   rows: 3
   cols: 3
   data: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
-projection_matrix:
+projection_matrix:  # 标准标定字段 P，用于校正后图像的投影
   rows: 3
   cols: 4
   data: [1727.213630, 0.0, 716.505843, 0.0, 0.0, 1747.447282, 545.227830, 0.0, 0.0, 0.0, 1.0, 0.0]

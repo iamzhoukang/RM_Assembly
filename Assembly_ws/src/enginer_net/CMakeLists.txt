@@ -18,6 +18,7 @@ find_package(std_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs highgui calib3d)
 
 # OpenVINO 优先用环境里的；找不到就回退到用户目录下的源码编译版本（ABI=1）。
@@ -59,7 +60,7 @@ target_link_libraries(pnp_solver PUBLIC detector ${OpenCV_LIBS})
 
 add_executable(net_node src/net_node.cpp)
 ament_target_dependencies(net_node
-  rclcpp sensor_msgs geometry_msgs std_msgs cv_bridge tf2 tf2_ros ament_index_cpp)
+  rclcpp sensor_msgs geometry_msgs std_msgs cv_bridge tf2 tf2_ros tf2_geometry_msgs ament_index_cpp)
 target_link_libraries(net_node pnp_solver detector ${OpenCV_LIBS})
 
 add_executable(detector_example tools/detector_example.cpp)

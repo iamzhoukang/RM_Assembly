@@ -37,11 +37,10 @@ class CameraNode : public rclcpp::Node
         const auto path = declare_parameter<std::string>("calibration_file", default_path);
 
         std::string camera_name;
-        if(camera_calibration_parsers::readCalibration(path, camera_name, camera_info_)){
-            RCLCPP_INFO(get_logger(), "已加载相机标定文件: %s", path.c_str());
-            return;
+        if(!camera_calibration_parsers::readCalibration(path, camera_name, camera_info_)){
+            throw std::runtime_error("读取相机标定文件失败: " + path);
         }
-
+        RCLCPP_INFO(get_logger(), "已加载相机标定文件: %s", path.c_str());
     }
 
     void initCamera()

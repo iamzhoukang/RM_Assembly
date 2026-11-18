@@ -449,7 +449,9 @@ CameraInfo.k → 内参 K，CameraInfo.d → 畸变 D
     ↓
 PnpSolver.estimate()：相机 ← 兑换站
     ↓
-/exchange_pose + /tf + /perception/status
+按图像时间戳查询 output_frame ← 相机，换算 /exchange_pose
+    ↓
+发布位姿、可选的相机系目标 TF、处理状态
     ↓
 在副本上绘制，可选显示或发布调试图
 ```
@@ -462,12 +464,12 @@ PnpSolver.estimate()：相机 ← 兑换站
 |---|---|---|
 | /image_raw | sensor_msgs/Image | 相机原图输入 |
 | /camera_info | sensor_msgs/CameraInfo | 同一相机的标定参数输入 |
-| /exchange_pose | geometry_msgs/PoseStamped | 目标在 camera_optical 中的位姿，平移单位米 |
-| /perception/status | std_msgs/String | ok 或 perception_failed: 错误信息 |
+| /exchange_pose | geometry_msgs/PoseStamped | 目标在 output_frame 中的位姿，默认 arm_base，平移单位米 |
+| /perception/status | std_msgs/String | ok、perception_failed 或 tf_unavailable |
 | /tf | tf2_msgs/TFMessage | camera_optical → exchange_target，publish_tf 控制开关 |
 | /perception/annotated_image | sensor_msgs/Image | 可选 BGR8 调试图，默认关闭 |
 
-PoseStamped 和 TF 都沿用输入图像的时间戳及父坐标系，不使用推理完成时间代替。矩阵的旋转部分用 tf2::Matrix3x3 转成归一化四元数。目标原点为 pnp.yaml 中的 ring 点。两个输入使用 SensorDataQoS、keep_last(1)，单线程顺序复用推理请求；推理慢时允许丢弃排队旧帧，以控制积压。
+PoseStamped 和目标 TF 都沿用输入图像的时间戳。PoseStamped 的 frame_id 是 output_frame，目标 TF 的父坐标系是图像的 camera_frame。output_frame 与 camera_frame 相同时可直接发布相机系位姿。矩阵的旋转部分用 tf2::Matrix3x3 转成归一化四元数。目标原点为 pnp.yaml 中的 ring 点。两个输入使用 SensorDataQoS、keep_last(1)，单线程顺序复用推理请求；推理慢时允许丢弃排队旧帧，以控制积压。
 
 ### 失败处理及港科对照
 
@@ -479,17 +481,18 @@ PoseStamped 和 TF 都沿用输入图像的时间戳及父坐标系，不使用�
 | 图像转换异常 | 向上传递，主函数记录后退出 |
 | 检测或 PnP 当帧失败 | 发布失败状态、节流中文 WARN；本帧不发布位姿或 TF |
 | 检测成功但 PnP 失败 | 调试副本保留检测框和关键点，状态为 pnp_failed |
-| 求解成功 | 发布位姿、可选 TF、ok 状态和调试图 |
+| 求解成功但查不到图像时刻的 TF | 发布 tf_unavailable，跳过当帧 /exchange_pose，仍可广播相机系目标 TF |
+| 求解和转换成功 | 发布位姿、可选 TF、ok 状态和调试图 |
 
 没有额外添加最终重投影误差拒绝规则，算法错误条件保持前述港科实现。调试绘制跳过非有限坐标，避免 NaN 转整型像素导致绘制错误；这不改变算法输出。
 
-港科 Host 同时支持左右相机选择、虚拟云台、预热及利用已有 TF 转换到 arm_base。本版按当前单 CS016 的范围接入相机坐标系，并增加已约定的目标 TF 广播；尚不执行基座坐标转换，也没有搬入双相机/云台控制。可选调试图发布及当帧失败保留观察结果的处理方式参考港科 Host。
+港科 Host 同时支持左右相机选择、虚拟云台、预热及利用已有 TF 转换到 arm_base。本版针对单 CS016，按图像时间戳查询变换，最多等待 50 ms，查询失败后跳过当帧基座系位姿。可选调试图发布及当帧失败保留观察结果的处理方式参考港科 Host。
 
 ### 显示内容和帧率
 
 黄色框为 LiteHRNet 实际使用的框，蓝色细框为 YOLO 检测框；关键点显示名称和原始热图分数，达到可见性阈值为绿色，低于阈值为红色。高分点并不表示一定是 RANSAC 内点，此图没有绘制 RANSAC 内点标记。
 
-画面标题显示 detect_failed、pnp_failed 或 ok，以及 processing FPS 和本帧处理耗时；成功时显示相机坐标系下的 xyz(m) 和全部匹配点的平均重投影误差。
+画面标题显示 detect_failed、pnp_failed、tf_unavailable 或 ok，以及 processing FPS 和本帧处理耗时。PnP 成功时显示相机坐标系下的 camera xyz(m) 和全部匹配点的平均重投影误差。
 
 processing FPS 用相邻开始处理图像回调的间隔计算，第一帧显示 0；这是节点实际处理频率，包含相机到帧间隔、上帧推理和显示等影响，不代表相机硬件帧率。耗时统计从颜色转换前开始，到推理和状态/位姿发布后结束，不含当前帧的绘制显示。show_window=false 且未开启调试图发布时跳过绘制，原始图像始终不修改。
 
@@ -531,6 +534,14 @@ ros2 run enginer_net net_node --ros-args \
   --params-file src/enginer_net/config/pnp.yaml
 ```
 
+联调基座系输出时，需要由外部节点提供 arm_base → camera_optical。还没有随动支架节点时，可在单独终端用一组测试值验证消息链路：
+
+```bash
+ros2 run tf2_ros static_transform_publisher --x 1 --frame-id arm_base --child-frame-id camera_optical
+```
+
+这组静态变换仅用于联调。单独测试视觉时，可将 net.yaml 的 output_frame 设为 camera_optical。
+
 查看输出：
 
 ```bash
@@ -539,11 +550,11 @@ ros2 topic echo /perception/status
 ros2 run tf2_ros tf2_echo camera_optical exchange_target
 ```
 
-修改 camera_frame 时，需要与相机节点的 frame_id 同步；目标帧 exchange_target 应由本节点唯一发布。每帧失败时停止发送新结果，TF 缓存可能仍保留上一帧变换，消费者应使用时间戳及状态判断是否有效。
+修改 camera_frame 时，需要与相机节点的 frame_id 同步；目标帧 exchange_target 应由本节点唯一发布。检测或 PnP 失败时停止发送当帧结果，TF 缓存可能仍保留上一帧变换，消费者应使用时间戳及状态判断是否有效。
 
 ### 当前完成范围与验证边界
 
-这一版代码完成 net 包的单目实时感知主链路，包含模型与几何参数加载、图像/内参接入、Detector/PnP 调用、相机坐标位姿和 TF、状态及调试显示。要确认可用于你的机器人，仍需在 Ubuntu 完成构建及相机联调。相机平行连杆运动学、手眼标定、arm_base 转换、机械臂规划与串口控制属于后续模块。
+这一版代码完成 net 包的单目实时感知主链路，包含模型与几何参数加载、图像/内参接入、Detector/PnP 调用、配置坐标系下的位姿、相机系目标 TF、状态及调试显示。相机平行连杆运动学、手眼标定、机械臂规划与串口控制属于后续模块。
 
 本机没有 ROS 2，验证使用模拟 ROS 消息/订阅/发布与 cv_bridge 接口、真实 tf2 数学头文件及真实 OpenVINO 算法，检查参数映射、RGB 转 BGR、图像不被污染、位姿/TF 方向和时间戳、等待 CameraInfo、无目标、PnP 失败和帧不匹配分支。
 
